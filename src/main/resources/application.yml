@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: coupon-rush
+  datasource:
+    url: jdbc:mysql://localhost:13306/coupon_rush?useSSL=false&allowPublicKeyRetrieval=true
+    username: coupon
+    password: coupon
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+  sql:
+    init:
+      mode: never
+
+server:
+  port: 8080
