@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 기술 스택
 
-Java 21, Spring Boot 3.x, MySQL, Redis (Redisson), Kafka
+Java 21, Spring Boot 4.x, MySQL, Redis (Redisson), Kafka
 Testcontainers, k6, Prometheus + Grafana, Docker Compose
 Terraform, AWS (EC2, RDS, ElastiCache, MSK)
 
