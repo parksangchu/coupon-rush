@@ -1,16 +1,14 @@
 package com.couponrush.domain.coupon;
 
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class CouponService {
 
     private final CouponRepository couponRepository;
-
-    public CouponService(CouponRepository couponRepository) {
-        this.couponRepository = couponRepository;
-    }
 
     public Coupon create(String code, Integer totalQuantity) {
         validate(code, totalQuantity);

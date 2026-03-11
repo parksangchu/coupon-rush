@@ -1,6 +1,7 @@
 package com.couponrush.domain.coupon;
 
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,13 +12,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/coupons")
+@RequiredArgsConstructor
 public class CouponController {
 
     private final CouponService couponService;
-
-    public CouponController(CouponService couponService) {
-        this.couponService = couponService;
-    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

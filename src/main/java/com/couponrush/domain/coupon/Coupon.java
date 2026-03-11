@@ -7,9 +7,14 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "coupons")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Coupon {
 
     @Id
@@ -28,33 +33,10 @@ public class Coupon {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    protected Coupon() {
-    }
-
     public Coupon(String code, Integer totalQuantity) {
         this.code = code;
         this.totalQuantity = totalQuantity;
         this.issuedQuantity = 0;
         this.createdAt = LocalDateTime.now();
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public Integer getTotalQuantity() {
-        return totalQuantity;
-    }
-
-    public Integer getIssuedQuantity() {
-        return issuedQuantity;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
     }
 }
