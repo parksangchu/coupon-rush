@@ -1,4 +1,4 @@
-package com.couponrush.api.common;
+package com.couponrush.global;
 
 import java.util.Map;
 import org.springframework.http.HttpStatus;

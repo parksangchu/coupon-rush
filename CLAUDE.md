@@ -57,14 +57,14 @@ k6 run k6/scenarios/spike.js
 
 ### 패키지 구조
 
+기능별(Feature) 구조. 도메인 기능 단위로 엔티티·서비스·컨트롤러·DTO를 함께 둔다.
+
 ```
 src/main/java/com/couponrush/
 ├── domain/
-│   ├── coupon/       # Coupon 엔티티
-│   └── issuance/     # Issuance 엔티티
-├── strategy/         # IssuanceStrategy 인터페이스 + 5개 구현체
-├── api/              # 발급 API
-└── config/           # 전략 선택 설정
+│   └── coupon/       # Coupon(root) + Issuance 애그리거트, 전략, 서비스, 컨트롤러, DTO
+├── global/           # 전역 설정, 예외 핸들러
+└── common/           # 공통 유틸, 기반 클래스
 ```
 
 ## 작업 원칙

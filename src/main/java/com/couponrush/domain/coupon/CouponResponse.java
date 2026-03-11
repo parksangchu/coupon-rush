@@ -1,6 +1,5 @@
-package com.couponrush.api.coupon;
+package com.couponrush.domain.coupon;
 
-import com.couponrush.domain.coupon.Coupon;
 import java.time.LocalDateTime;
 
 public record CouponResponse(

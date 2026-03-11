@@ -1,7 +1,5 @@
-package com.couponrush.api.coupon;
+package com.couponrush.domain.coupon;
 
-import com.couponrush.domain.coupon.Coupon;
-import com.couponrush.domain.coupon.CouponService;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
