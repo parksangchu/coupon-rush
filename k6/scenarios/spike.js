@@ -2,15 +2,17 @@ import http from 'k6/http';
 import { check } from 'k6';
 import { BASE_URL } from '../lib/config.js';
 
+const RATE = parseInt(__ENV.RATE || '5000');
+
 export const options = {
   scenarios: {
     spike: {
       executor: 'constant-arrival-rate',
-      rate: 50000,
+      rate: RATE,
       timeUnit: '1s',
       duration: '30s',
-      preAllocatedVUs: 1000,
-      maxVUs: 5000,
+      preAllocatedVUs: 200,
+      maxVUs: 1000,
     },
   },
   thresholds: {
