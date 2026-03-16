@@ -113,14 +113,22 @@ resource "aws_security_group" "app" {
   }
 }
 
-resource "aws_security_group" "k6" {
-  name_prefix = "${var.project_name}-k6-"
+resource "aws_security_group" "test" {
+  name_prefix = "${var.project_name}-test-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
     description = "SSH"
     from_port   = 22
     to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip]
+  }
+
+  ingress {
+    description = "Grafana"
+    from_port   = 3000
+    to_port     = 3000
     protocol    = "tcp"
     cidr_blocks = [var.my_ip]
   }
@@ -133,7 +141,7 @@ resource "aws_security_group" "k6" {
   }
 
   tags = {
-    Name    = "${var.project_name}-k6-sg"
+    Name    = "${var.project_name}-test-sg"
     Project = var.project_name
   }
 }

@@ -3,9 +3,14 @@ output "app_server_public_ip" {
   value       = aws_instance.app.public_ip
 }
 
-output "k6_server_public_ip" {
-  description = "k6 부하 생성기 퍼블릭 IP"
-  value       = aws_instance.k6.public_ip
+output "app_server_private_ip" {
+  description = "앱 서버 프라이빗 IP (Prometheus 스크랩용)"
+  value       = aws_instance.app.private_ip
+}
+
+output "test_server_public_ip" {
+  description = "테스트 서버 퍼블릭 IP (k6 + 모니터링)"
+  value       = aws_instance.test.public_ip
 }
 
 output "rds_endpoint" {

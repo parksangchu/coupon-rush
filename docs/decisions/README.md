@@ -9,6 +9,7 @@
 | [0003](infra/0003-testcontainers-mysql.md) | 테스트 DB를 H2에서 Testcontainers MySQL로 전환 | accepted | 2026-03-16 |
 | [0004](infra/0004-incremental-dependency-addition.md) | Redis/Kafka 의존성을 Step별 점진적으로 추가 | accepted | 2026-03-16 |
 | [0005](infra/0005-load-test-target-rps.md) | 부하 테스트를 고정 RPS가 아닌 점진적 증가 방식으로 수행 | accepted | 2026-03-16 |
+| [0006](infra/0006-k6-monitoring-colocation.md) | k6 EC2에 모니터링(Prometheus + Grafana) 통합 배치 | accepted | 2026-03-16 |
 
 ## coupon
 
