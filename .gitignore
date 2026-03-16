@@ -6,3 +6,9 @@ build/
 out/
 .claude/
 task.md
+TODO.md
+terraform/.terraform/
+terraform/terraform.tfstate*
+terraform/terraform.tfvars
+k6/reports/
+*.env
