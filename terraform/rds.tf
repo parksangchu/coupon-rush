@@ -12,7 +12,7 @@ resource "aws_db_instance" "mysql" {
   identifier     = "${var.project_name}-mysql"
   engine         = "mysql"
   engine_version = "8.4"
-  instance_class = "db.t3.micro"
+  instance_class = "db.t3.small"
 
   allocated_storage = 20
   storage_type      = "gp3"
