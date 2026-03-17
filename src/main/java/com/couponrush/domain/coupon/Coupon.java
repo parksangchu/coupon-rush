@@ -34,9 +34,26 @@ public class Coupon {
     private LocalDateTime createdAt;
 
     public Coupon(String code, Integer totalQuantity) {
+        if (code == null || code.isBlank()) {
+            throw new IllegalArgumentException("쿠폰 코드는 필수입니다");
+        }
+        if (totalQuantity == null || totalQuantity <= 0) {
+            throw new IllegalArgumentException("총 수량은 1 이상이어야 합니다");
+        }
         this.code = code;
         this.totalQuantity = totalQuantity;
         this.issuedQuantity = 0;
         this.createdAt = LocalDateTime.now();
+    }
+
+    public void issue() {
+        if (this.issuedQuantity >= this.totalQuantity) {
+            throw new CouponExhaustedException();
+        }
+        this.issuedQuantity++;
+    }
+
+    public int remainingQuantity() {
+        return this.totalQuantity - this.issuedQuantity;
     }
 }

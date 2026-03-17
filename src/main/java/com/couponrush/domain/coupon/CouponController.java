@@ -4,6 +4,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,5 +33,15 @@ public class CouponController {
         return couponService.findAll().stream()
             .map(CouponResponse::from)
             .toList();
+    }
+
+    @PostMapping("/{couponId}/issue")
+    public IssueResponse issue(@PathVariable Long couponId, @RequestBody IssueRequest request) {
+        return couponService.issue(couponId, request.userId());
+    }
+
+    @GetMapping("/{couponId}/status")
+    public CouponStatusResponse getStatus(@PathVariable Long couponId) {
+        return couponService.getStatus(couponId);
     }
 }
