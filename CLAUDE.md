@@ -48,14 +48,21 @@ k6 run k6/scenarios/spike.js
 
 ### 패키지 구조
 
-기능별(Feature) 구조. 도메인 기능 단위로 엔티티·서비스·컨트롤러·DTO를 함께 둔다.
+기능별(Feature) 구조. 도메인 기능 단위로 묶고, 내부는 역할별 하위 패키지로 분리한다.
 
 ```
 src/main/java/com/couponrush/
 ├── domain/
-│   └── coupon/       # Coupon(root) + Issuance 애그리거트, 전략, 서비스, 컨트롤러, DTO
-├── global/           # 전역 설정, 예외 핸들러
-└── common/           # 공통 유틸, 기반 클래스
+│   └── coupon/
+│       ├── controller/    # REST 컨트롤러
+│       ├── dto/           # 요청/응답 DTO
+│       ├── entity/        # JPA 엔티티
+│       ├── exception/     # 도메인 예외
+│       ├── repository/    # JPA 리포지토리
+│       ├── service/       # 비즈니스 서비스
+│       └── strategy/      # 동시성 전략 (IssuanceStrategy 구현체)
+├── global/                # 전역 설정, 예외 핸들러
+└── common/                # 공통 유틸, 기반 클래스
 ```
 
 ## 작업 원칙
@@ -76,4 +83,8 @@ src/main/java/com/couponrush/
 각 Step에서 한계를 발견하면, 다음 전략으로 넘어가기 전에 "현재 전략 안에서 해결할 수 있는 방법은 없는가"를 검토한다.
 검토한 대안과 왜 기각했는지를 설계문서에 기록한다.
 예: "connection pool을 늘리면?" → 실측 결과 → 기각 사유
+
+### ADR 작성을 먼저 제안한다
+설계 결정(기술 선택, 구조 변경, 관용과 다른 선택 등)이 포함된 작업을 완료하면,
+커밋 전에 ADR로 남길 만한 내용이 있는지 먼저 제안한다.
 
