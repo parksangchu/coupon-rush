@@ -18,3 +18,5 @@
 | [0001](coupon/0001-java-package-convention.md) | Java package는 underscore 없이 소문자 도메인 규칙 사용 | accepted | 2026-03-05 |
 | [0002](coupon/0002-vertical-slice-first-implementation.md) | 첫 구현 단위는 Coupon 생성/조회의 수직 슬라이스로 시작 | accepted | 2026-03-05 |
 | [0003](coupon/0003-controller-service-separation.md) | 컨트롤러는 입출력만 담당하고 비즈니스 로직은 CouponService로 분리 | accepted | 2026-03-05 |
+| [0004](coupon/0004-no-foreign-key-constraint.md) | Issuance → Coupon 간 FK 제약 조건 미사용 | accepted | 2026-03-17 |
+| [0005](coupon/0005-strategy-selection-with-conditional-on-property.md) | 전략 선택 방식으로 @ConditionalOnProperty 사용 | accepted | 2026-03-17 |
