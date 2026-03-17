@@ -1,4 +1,4 @@
-package com.couponrush.domain.coupon;
+package com.couponrush.domain.coupon.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import com.couponrush.domain.coupon.exception.CouponExhaustedException;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;

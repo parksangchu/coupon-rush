@@ -1,4 +1,6 @@
-package com.couponrush.domain.coupon;
+package com.couponrush.domain.coupon.repository;
+
+import com.couponrush.domain.coupon.entity.Coupon;
 
 import jakarta.persistence.LockModeType;
 import java.util.Optional;

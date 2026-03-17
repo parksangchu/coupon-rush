@@ -1,7 +1,7 @@
 package com.couponrush.global;
 
-import com.couponrush.domain.coupon.CouponExhaustedException;
-import com.couponrush.domain.coupon.DuplicateIssuanceException;
+import com.couponrush.domain.coupon.exception.CouponExhaustedException;
+import com.couponrush.domain.coupon.exception.DuplicateIssuanceException;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;

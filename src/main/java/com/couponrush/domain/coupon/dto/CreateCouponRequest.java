@@ -1,4 +1,4 @@
-package com.couponrush.domain.coupon;
+package com.couponrush.domain.coupon.dto;
 
 public record CreateCouponRequest(
     String code,

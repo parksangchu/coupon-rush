@@ -1,4 +1,6 @@
-package com.couponrush.domain.coupon;
+package com.couponrush.domain.coupon.repository;
+
+import com.couponrush.domain.coupon.entity.Issuance;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

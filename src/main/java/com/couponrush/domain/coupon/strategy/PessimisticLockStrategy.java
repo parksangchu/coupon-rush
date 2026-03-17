@@ -1,5 +1,10 @@
-package com.couponrush.domain.coupon;
+package com.couponrush.domain.coupon.strategy;
 
+import com.couponrush.domain.coupon.entity.Coupon;
+import com.couponrush.domain.coupon.entity.Issuance;
+import com.couponrush.domain.coupon.repository.CouponRepository;
+import com.couponrush.domain.coupon.repository.IssuanceRepository;
+import com.couponrush.domain.coupon.exception.DuplicateIssuanceException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;

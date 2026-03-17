@@ -1,5 +1,11 @@
-package com.couponrush.domain.coupon;
+package com.couponrush.domain.coupon.service;
 
+import com.couponrush.domain.coupon.dto.CouponStatusResponse;
+import com.couponrush.domain.coupon.dto.IssueResponse;
+import com.couponrush.domain.coupon.entity.Coupon;
+import com.couponrush.domain.coupon.entity.Issuance;
+import com.couponrush.domain.coupon.repository.CouponRepository;
+import com.couponrush.domain.coupon.strategy.IssuanceStrategy;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

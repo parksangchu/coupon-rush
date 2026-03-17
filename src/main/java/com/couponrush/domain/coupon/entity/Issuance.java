@@ -1,4 +1,4 @@
-package com.couponrush.domain.coupon;
+package com.couponrush.domain.coupon.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

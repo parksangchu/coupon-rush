@@ -1,9 +1,13 @@
-package com.couponrush.domain.coupon;
+package com.couponrush.domain.coupon.strategy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.couponrush.IntegrationTestBase;
+import com.couponrush.domain.coupon.entity.Coupon;
+import com.couponrush.domain.coupon.repository.CouponRepository;
+import com.couponrush.domain.coupon.exception.CouponExhaustedException;
+import com.couponrush.domain.coupon.exception.DuplicateIssuanceException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;

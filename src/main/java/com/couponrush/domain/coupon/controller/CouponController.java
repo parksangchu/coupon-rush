@@ -1,5 +1,12 @@
-package com.couponrush.domain.coupon;
+package com.couponrush.domain.coupon.controller;
 
+import com.couponrush.domain.coupon.entity.Coupon;
+import com.couponrush.domain.coupon.service.CouponService;
+import com.couponrush.domain.coupon.dto.CouponResponse;
+import com.couponrush.domain.coupon.dto.CouponStatusResponse;
+import com.couponrush.domain.coupon.dto.CreateCouponRequest;
+import com.couponrush.domain.coupon.dto.IssueRequest;
+import com.couponrush.domain.coupon.dto.IssueResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
