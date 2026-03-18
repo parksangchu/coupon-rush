@@ -28,9 +28,6 @@ public class CouponController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CouponResponse create(@RequestBody CreateCouponRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("request is required");
-        }
         Coupon saved = couponService.create(request.code(), request.totalQuantity());
         return CouponResponse.from(saved);
     }
