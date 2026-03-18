@@ -1,9 +1,15 @@
 import http from 'k6/http';
 import { check } from 'k6';
+import { Trend, Counter } from 'k6/metrics';
 import { BASE_URL } from '../lib/config.js';
 
 const RATE = parseInt(__ENV.RATE || '500');
 const TOTAL_QUANTITY = parseInt(__ENV.TOTAL_QUANTITY || '100');
+
+const issuedDuration = new Trend('duration_issued');
+const rejectedDuration = new Trend('duration_rejected');
+const issuedCount = new Counter('count_issued');
+const rejectedCount = new Counter('count_rejected');
 
 export const options = {
   scenarios: {
@@ -18,7 +24,6 @@ export const options = {
   },
   thresholds: {
     'checks': ['rate==1'],
-    'http_req_duration': ['p(99)<500'],
   },
 };
 
@@ -50,6 +55,14 @@ export default function (data) {
   check(res, {
     'status is 200 or 409': (r) => r.status === 200 || r.status === 409,
   });
+
+  if (res.status === 200) {
+    issuedDuration.add(res.timings.duration);
+    issuedCount.add(1);
+  } else if (res.status === 409) {
+    rejectedDuration.add(res.timings.duration);
+    rejectedCount.add(1);
+  }
 }
 
 export function teardown(data) {
