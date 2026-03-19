@@ -90,6 +90,41 @@
 - `system_cpu_usage`: ~5% 미만 (CPU는 병목 아님)
 - 메트릭 수집 빈 구간 발생: 앱 과부하로 Prometheus scrape 요청도 처리 못함 → management port 분리 필요
 
+### 2026-03-19: 재테스트 — management port 분리 + Tomcat 메트릭 추가
+
+**개선 사항**:
+1. **management port 분리** (`management.server.port: 9090`): Actuator를 별도 스레드풀로 분리하여 앱 과부하 시에도 메트릭 수집 보장
+2. **Tomcat 메트릭 활성화** (`server.tomcat.mbeanregistry.enabled: true`): Spring Boot 3.x 기본값이 false — 스레드/커넥션 메트릭 수집
+3. **Grafana 대시보드 확장**: Tomcat Threads(current/busy/max), Tomcat Connections(current/keepalive) 패널 추가
+
+**테스트 조건**: 500 RPS, 쿠폰 10,000개, 30초
+
+**결과**:
+
+| 구분 | 건수 | avg | p95 | max |
+|------|------|-----|-----|-----|
+| 발급 성공 (200) | 7,201 | 8,195ms | 11,072ms | 15,518ms |
+
+- 10,000개 중 7,201개 발급, 2,799개 미소진
+- 실측 처리량: **~182 TPS**
+- dropped_iterations: 7,799 (52%)
+- 정합성: 초과발급 0%
+
+**모니터링 데이터 (메트릭 갭 없이 수집 완료)**:
+- `hikaricp_connections_active`: 10/10 포화
+- `hikaricp_connections_pending`: **~200까지 급증**
+- `tomcat_threads_current`: 200/200 (max 도달, 전부 busy)
+- `tomcat_connections_current`: **~2,000** (max 8,192 대비 여유 — Tomcat 레벨은 병목 아님)
+- `system_cpu_usage`: **60~80%** (이전 대비 상승, 하지만 100%는 아님)
+- `process_cpu_usage`: ~60%
+
+**병목 체인 확인**:
+```
+요청 → Tomcat Connection(2K/8K, 여유) → Thread(200/200, 포화) → HikariCP(10/10, pending 200) → DB Lock(직렬화)
+```
+
+Tomcat connections가 8,192(max)까지 도달하지 않았다는 것은 Tomcat 자체가 병목이 아니라는 의미. 200개 스레드가 전부 HikariCP connection 대기로 blocking되면서 처리량이 제한된다. CPU는 60~80%로 여유가 있는데도 처리량이 ~182 TPS인 이유는 **lock contention으로 인한 I/O 대기**가 지배적이기 때문이다.
+
 **두 테스트 비교에서 드러난 점**:
 
 | | 테스트 1 (1,000개) | 테스트 2 (10,000개) |
@@ -128,7 +163,8 @@ Pessimistic Lock의 요청 처리 흐름은 다음과 같다:
 
 Pessimistic Lock은 정합성은 완벽하지만(1,000개 테스트에서 초과발급 0%), 고부하에서 두 가지 구조적 한계가 확인됐다:
 
-1. **처리량 상한 ~200 TPS**: `FOR UPDATE`가 단일 row를 직렬화하므로 RPS를 올려도 처리량이 늘지 않는다. 10,000개 쿠폰을 소진하려면 ~50초가 필요하지만, 테스트 39초 내에 8,141개만 발급.
+1. **처리량 상한 ~182 TPS**: `FOR UPDATE`가 단일 row를 직렬화하므로 RPS를 올려도 처리량이 늘지 않는다. 10,000개 쿠폰을 소진하려면 ~55초가 필요하지만, 테스트 39초 내에 7,201개만 발급.
 2. **거절도 느리다**: 재고가 0이라는 것을 확인하려면 lock을 잡아야 하고, lock을 잡으려면 connection이 필요하다. 거절 요청도 발급과 동일한 경로를 거치면서 p95=8.9s.
+3. **병목은 DB lock + connection pool**: CPU 60~80%로 여유가 있지만, Tomcat threads 200개가 전부 HikariCP connection 대기로 blocking. Tomcat connections(2K/8K)에는 여유가 있어 Tomcat 자체는 병목이 아님.
 
-병목은 CPU(~5%)가 아닌 DB 단일 row lock + connection pool(pending ~200). 다음 전략에서는 DB 도달 전에 요청을 차단하는 방식을 시도한다.
+다음 전략에서는 DB 도달 전에 요청을 차단하는 방식을 시도한다.
