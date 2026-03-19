@@ -97,9 +97,64 @@
       ]
     },
     {
-      "title": "System CPU Usage",
+      "title": "Tomcat Threads",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 20 },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "tomcat_threads_current_threads",
+          "legendFormat": "current",
+          "refId": "A"
+        },
+        {
+          "expr": "tomcat_threads_busy_threads",
+          "legendFormat": "busy",
+          "refId": "B"
+        },
+        {
+          "expr": "tomcat_threads_config_max_threads",
+          "legendFormat": "max",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "title": "Tomcat Connections",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 20 },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "tomcat_connections_current_connections",
+          "legendFormat": "current",
+          "refId": "A"
+        },
+        {
+          "expr": "tomcat_connections_keepalive_current_connections",
+          "legendFormat": "keepalive",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "System CPU Usage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -125,7 +180,7 @@
     {
       "title": "JVM Heap Memory",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
