@@ -8,4 +8,5 @@
 
 | 주제 | 상태 | 최종 수정 |
 |------|------|-----------|
-| [부하 테스트 인프라 구성](infra/load-test-infrastructure.md) | resolved | 2026-03-16 |
+| [부하 테스트](infra/load-test.md) | resolved | 2026-03-19 |
+| [Pessimistic Lock 부하 테스트](coupon/pessimistic-lock-load-test.md) | resolved | 2026-03-19 |
