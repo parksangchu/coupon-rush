@@ -4,7 +4,7 @@ import { Trend, Counter } from 'k6/metrics';
 import { BASE_URL } from '../lib/config.js';
 
 const RATE = parseInt(__ENV.RATE || '500');
-const TOTAL_QUANTITY = parseInt(__ENV.TOTAL_QUANTITY || '100');
+const TOTAL_QUANTITY = parseInt(__ENV.TOTAL_QUANTITY || '10000');
 
 const issuedDuration = new Trend('duration_issued');
 const rejectedDuration = new Trend('duration_rejected');
