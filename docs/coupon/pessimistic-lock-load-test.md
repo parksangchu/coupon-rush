@@ -179,6 +179,15 @@ Pessimistic Lock의 요청 처리 흐름은 다음과 같다:
    - 멀티 인스턴스면 플래그 동기화 필요 → 결국 외부 저장소(Redis) 필요
    - 이 발상을 확장하면 Step 3(Redis Atomic Counter)
 
+5. **Single UPDATE로 전환** (`UPDATE ... SET quantity = quantity - 1 WHERE quantity > 0`) → 기각 (단, 개선은 됨)
+   - SELECT FOR UPDATE는 lock을 잡고 → 로직 처리 → UPDATE → COMMIT까지 lock을 보유. Single UPDATE는 한 문장에서 lock 획득과 수정이 끝나므로 lock 보유 시간이 훨씬 짧다
+   - 개념적으로 Redis INCR과 동일 — "한 번의 원자 연산으로 판정". 차이는 매체(디스크 vs 메모리)
+   - 182 TPS보다 확실히 높아지지만, 구조적 한계는 남음:
+     - InnoDB는 같은 row에 대한 concurrent UPDATE를 여전히 X lock으로 직렬화
+     - 매 요청마다 DB 왕복 (네트워크 + redo log write)
+     - connection pool 병목 불변
+   - **Step 1 안에서 가장 실질적인 개선이지만, "DB 원자 연산"의 상한을 확인하는 것이지 구조를 바꾸는 것은 아님**
+
 **왜 Redis인가**:
 
 외부 저장소 조건 3가지:
@@ -201,7 +210,7 @@ Step 2: Redis Lock (직렬화, 인메모리) → ? TPS
 Step 3: Redis Counter (직렬화 제거, 원자 연산) → ? TPS
 ```
 
-**결정과 이유**: 4가지 대안을 검토한 결과, 모두 직렬화 구조를 바꾸지 못한다. Pessimistic Lock의 ~182 TPS는 튜닝의 문제가 아니라 구조적 상한이다. 다음 단계에서는 lock의 위치를 DB에서 Redis로 옮겨(Step 2) "직렬화가 느린 건 DB라서인가, 직렬화 자체가 문제인가"를 확인한다.
+**결정과 이유**: 5가지 대안을 검토한 결과, 1~4는 직렬화 구조를 바꾸지 못한다. 5번(Single UPDATE)은 lock 보유 시간을 줄여 실질적 개선이 가능하지만, DB 직렬화 + connection pool 한계는 남는다. 같은 "원자 연산" 개념을 인메모리로 옮기면 이 한계를 넘을 수 있다 → Redis로 전환한다.
 
 ## 현재 결론
 
@@ -210,6 +219,6 @@ Pessimistic Lock은 정합성은 완벽하지만(1,000개 테스트에서 초과
 1. **처리량 상한 ~182 TPS**: `FOR UPDATE`가 단일 row를 직렬화하므로 RPS를 올려도 처리량이 늘지 않는다. 10,000개 쿠폰을 소진하려면 ~55초가 필요하지만, 테스트 39초 내에 7,201개만 발급.
 2. **거절도 느리다**: 재고가 0이라는 것을 확인하려면 lock을 잡아야 하고, lock을 잡으려면 connection이 필요하다. 거절 요청도 발급과 동일한 경로를 거치면서 p95=8.9s.
 3. **병목은 DB lock + connection pool**: CPU 60~80%로 여유가 있지만, Tomcat threads 200개가 전부 HikariCP connection 대기로 blocking. Tomcat connections(2K/8K)에는 여유가 있어 Tomcat 자체는 병목이 아님.
-4. **대안 검토 완료**: HikariCP pool 증가, DB 스펙 업, Tomcat threads 증가, 앱 레벨 플래그 — 모두 직렬화 구조를 바꾸지 못해 기각. 구조를 바꾸려면 lock의 위치(DB → Redis)나 방식(직렬화 → 원자 연산)을 변경해야 한다.
+4. **대안 검토 완료**: 5가지 대안 검토. 1~4(pool 증가, DB 스펙 업, threads 증가, 앱 플래그)는 직렬화 구조를 바꾸지 못해 기각. 5번(Single UPDATE)은 lock 보유 시간 단축으로 개선 가능하지만 DB 직렬화 + connection pool 한계는 남음. 같은 원자 연산 개념을 인메모리(Redis)로 옮겨야 구조적 돌파가 가능하다.
 
 **전략 전환**: Step 2(Redis Distributed Lock)에서 lock을 인메모리로 옮겨 "직렬화가 느린 건 DB라서인가, 직렬화 자체가 문제인가"를 검증한다.
