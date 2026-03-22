@@ -26,8 +26,3 @@ variable "key_pair_name" {
   description = "EC2 SSH 키페어 이름"
   type        = string
 }
-
-variable "my_ip" {
-  description = "SSH 접근 허용 IP (CIDR, e.g. 1.2.3.4/32)"
-  type        = string
-}

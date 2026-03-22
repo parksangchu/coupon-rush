@@ -5,7 +5,6 @@ set -euo pipefail
 SSH_KEY="$HOME/.ssh/coupon-rush.pem"
 JAR_NAME="coupon-rush-0.0.1-SNAPSHOT.jar"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-
 # terraform output에서 IP/endpoint 읽기
 APP_IP=$(terraform -chdir="$PROJECT_ROOT/terraform" output -raw app_server_public_ip)
 RDS_ENDPOINT=$(terraform -chdir="$PROJECT_ROOT/terraform" output -raw rds_endpoint)
@@ -24,8 +23,8 @@ scp $SSH_OPTS "build/libs/$JAR_NAME" "ec2-user@$APP_IP:~/app.jar"
 
 echo "=== 3. 기존 프로세스 종료 + 앱 실행 (strategy: $STRATEGY) ==="
 ssh $SSH_OPTS "ec2-user@$APP_IP" << REMOTE
-  # 기존 java 프로세스 종료
-  pkill -f 'app.jar' || true
+  # 기존 java 프로세스 종료 (sudo로 실행된 프로세스 대응)
+  sudo pkill -f 'app.jar' || true
   sleep 2
 
   nohup sudo java -jar ~/app.jar \

@@ -15,7 +15,7 @@ data "aws_ami" "amazon_linux" {
 
 resource "aws_instance" "app" {
   ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t3.small"
+  instance_type          = "m6i.large"
   key_name               = var.key_pair_name
   subnet_id              = aws_subnet.public_a.id
   vpc_security_group_ids = [aws_security_group.app.id]
