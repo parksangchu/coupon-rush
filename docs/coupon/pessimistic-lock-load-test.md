@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 |------|------|
 | 상태 | in-progress |
-| 최종 수정 | 2026-03-19 |
+| 최종 수정 | 2026-03-22 |
 
 ## 배경
 
@@ -210,15 +210,138 @@ Step 2: Redis Lock (직렬화, 인메모리) → ? TPS
 Step 3: Redis Counter (직렬화 제거, 원자 연산) → ? TPS
 ```
 
-**결정과 이유**: 5가지 대안을 검토한 결과, 1~4는 직렬화 구조를 바꾸지 못한다. 5번(Single UPDATE)은 lock 보유 시간을 줄여 실질적 개선이 가능하지만, DB 직렬화 + connection pool 한계는 남는다. 같은 "원자 연산" 개념을 인메모리로 옮기면 이 한계를 넘을 수 있다 → Redis로 전환한다.
+**결정과 이유**: 5가지 대안을 검토한 결과, 1~4는 직렬화 구조를 바꾸지 못한다. 5번(Single UPDATE)은 lock 보유 시간을 줄여 실질적 개선이 가능하지만, DB 직렬화 + connection pool 한계는 남는다. 같은 "원자 연산" 개념을 인메모리로 옮기면 이 한계를 넘을 수 있다 → Redis로 전환한다. 단, Single UPDATE는 실측 없이 기각하기엔 아깝다. "DB 원자 연산의 상한"을 숫자로 확인하기 위해 구현 + 부하 테스트를 진행한다.
+
+### 2026-03-22: 인프라 변경 — t3(버스터블) → m6i/m6g(비버스터블)
+
+**문제/질문**: t3.small에서 부하 테스트 결과가 불안정하다. 같은 코드인데 실행할 때마다 결과가 들쭉날쭉.
+
+**원인 분석**:
+- CloudWatch에서 RDS CPU Credit Balance **0.0** 확인
+- t3는 버스터블 인스턴스로, CPU 크레딧 소진 시 베이스라인 성능(vCPU의 20%)으로 제한됨
+- 부하 테스트를 반복할수록 크레딧이 소진되어 결과를 신뢰할 수 없음
+
+**결정**: 부하 테스트 신뢰성을 위해 비버스터블 인스턴스로 변경
+
+| 구성 | 변경 전 | 변경 후 |
+|------|--------|--------|
+| App EC2 | t3.small (2 vCPU, 2GB) | m6i.large (2 vCPU, 8GB) |
+| RDS | db.t3.small (2 vCPU, 2GB) | db.m6g.large (2 vCPU, 8GB) |
+| Test EC2 | t3.small | m6i.large |
+
+**기타 개선**:
+- `deploy-app.sh`: `pkill` → `sudo pkill` (sudo로 실행된 Java 프로세스 종료 대응)
+- SSH 보안 그룹: `var.my_ip` → `0.0.0.0/0` (IP 변경 시마다 tfvars 수정 필요 → 제거)
+
+### 2026-03-22: Single UPDATE 부하 테스트 — DB 원자 연산의 상한 측정
+
+**문제/질문**: SELECT FOR UPDATE 대신 Single UPDATE(`UPDATE ... SET issued_quantity = issued_quantity + 1 WHERE issued_quantity < total_quantity`)를 쓰면 lock 보유 시간이 줄어든다. DB 내에서 할 수 있는 최선은 어디까지인가?
+
+**구현**:
+- `SingleUpdateStrategy`: `@ConditionalOnProperty(name = "coupon.strategy", havingValue = "single-update")`
+- `CouponRepository.incrementIssuedQuantity()`: JPQL `@Modifying` UPDATE
+- `IssuanceStrategyTestBase`: 전략 테스트 공통 로직 추출 (동시성/중복/소진 3개 테스트)
+
+**테스트 환경**: 모두 m6i.large / db.m6g.large (비버스터블)
+
+#### 500 RPS — 정합성 검증 (쿠폰 1,000개)
+
+| 전략 | 발급 p95 | 거절 p95 | max VU | dropped |
+|------|---------|---------|--------|---------|
+| Pessimistic Lock | 14ms | 2ms | 96 | 0 |
+| Single UPDATE | 2,065ms | 1,425ms | 640 | 615 |
+
+- 정합성: 두 전략 모두 **1,000개 소진, 초과발급 0%** ✓
+- 1,000개는 ~3초 만에 소진되어 이후 27초가 거절 폭주 구간. Single UPDATE가 이 구간에서 더 나빴음 (VU 640)
+
+#### 500 RPS — 성능 비교 (쿠폰 10,000개)
+
+| 전략 | 발급 p95 | 거절 p95 | max VU | dropped |
+|------|---------|---------|--------|---------|
+| Pessimistic Lock | 6ms | 283ms | 160 | 99 |
+| Single UPDATE | 123ms | 1.7ms | 64 | 0 |
+
+- 정합성: 두 전략 모두 **10,000개 소진, 초과발급 0%** ✓
+- 두 전략 모두 500 RPS를 소화. **차이가 불충분하여 RPS 증가 결정**
+
+#### 1,000 RPS — 성능 비교 (쿠폰 10,000개)
+
+| 전략 | 발급 건수 | 발급 p95 | 거절 p95 | max VU | dropped | 실제 처리 |
+|------|---------|---------|---------|--------|---------|----------|
+| Pessimistic Lock | 10,000 | **5,468ms** | **3,594ms** | **2,000** | **11,517 (38%)** | 18,486/30,000 |
+| Single UPDATE | 10,000 | **54ms** | **2.8ms** | **54** | **0** | 30,003/30,000 |
+
+- 정합성: 두 전략 모두 **10,000개 소진, 초과발급 0%** ✓
+- **Pessimistic Lock 붕괴**: VU 2,000 상한 도달, 38% 요청 드롭
+- **Single UPDATE 여유**: VU 54개로 1,000 RPS 완전 소화
+
+**모니터링 비교 (1,000 RPS, Grafana)**:
+
+| 지표 | Single UPDATE | Pessimistic Lock |
+|------|--------------|-----------------|
+| HikariCP Pending | 0 | 200 |
+| Tomcat busy threads | ~0 | ~90 |
+| Tomcat Connections | ~100 | ~2,000 |
+| System CPU | ~20% | ~90% |
+
+**차이의 원인 분석**:
+
+두 전략의 lock 보유 구간을 비교하면:
+
+```
+Pessimistic Lock:
+  SELECT FOR UPDATE ← lock 획득
+    existsByCouponIdAndUserId (duplicate check, lock 보유 중)
+    UPDATE issued_quantity
+    INSERT issuance
+  COMMIT ← lock 해제
+
+Single UPDATE:
+  existsByCouponIdAndUserId (lock 없이 실행)
+  UPDATE ... WHERE issued_quantity < total_quantity ← lock 획득
+    findById
+    INSERT issuance
+  COMMIT ← lock 해제
+```
+
+두 패턴의 구조적 차이:
+1. **판단 위치**: Pessimistic Lock은 "lock을 잡고 → 앱에서 판단 → DB에 반영"하는 구조. lock 안에서 duplicate check, 수량 확인 등 앱 로직이 실행되므로 lock 보유 시간이 길다. Single UPDATE는 "DB가 한 문장으로 판단 + 반영"하는 구조. 판단을 DB에 위임하므로 lock 보유 구간에 앱 왕복이 줄어든다.
+2. **거절 경로**: Pessimistic Lock은 거절도 FOR UPDATE lock을 잡아야 수량을 확인할 수 있음. Single UPDATE는 UPDATE 0 rows로 즉시 반환. 쿠폰 소진 이후 거절 요청이 자원을 점유하는 시간이 극적으로 다름.
+
+이 lock 보유 시간 차이가 1,000 RPS에서 대기열 이론(Queueing Theory)에 의해 비선형적으로 증폭된다. Pessimistic Lock은 lock 처리 용량을 초과하여 대기열이 폭발했고, Single UPDATE는 용량 이내에서 안정적으로 처리했다.
+
+**추가 실험 — findById 순서 최적화 시도**:
+
+findById를 UPDATE 앞으로 이동하면 lock 보유 시간이 줄어들 것으로 예상했으나, 결과는 오히려 성능 악화(VU 2,000 도달). 원인: 거절 경로에서도 findById가 실행되어 불필요한 DB 왕복이 추가됨. **거절 경로의 가벼움이 전체 성능의 핵심 요소**임을 실측으로 확인.
+
+**결정과 이유**:
+
+Single UPDATE는 DB 내에서 할 수 있는 최선이다. 1,000 RPS를 VU 54개로 소화하며, Pessimistic Lock 대비 발급 p95 기준 **100배** 빠르다. 하지만 여전히 InnoDB의 row-level X lock으로 직렬화되므로, RPS를 더 올리면 같은 패턴의 병목이 발생할 것이다.
+
+전략 전환 흐름 업데이트:
+
+```
+Step 1: Pessimistic Lock (직렬화, 디스크) → 500 RPS 소화, 1,000 RPS에서 붕괴
+Step 1 서브: Single UPDATE (원자 연산, 디스크) → 1,000 RPS 여유, DB 원자 연산의 상한
+  ↓ "같은 원자 연산을 인메모리로 옮기면?"
+Step 2: Redis Lock (직렬화, 인메모리) → 분산 락의 한계 검증
+Step 3: Redis Counter (원자 연산, 인메모리) → ? TPS
+```
 
 ## 현재 결론
 
-Pessimistic Lock은 정합성은 완벽하지만(1,000개 테스트에서 초과발급 0%), 고부하에서 구조적 한계가 확인됐다:
+두 전략 모두 정합성은 완벽하다(초과발급 0%). 성능 차이는 lock 보유 시간과 거절 경로의 구조 차이에서 비롯된다.
 
-1. **처리량 상한 ~182 TPS**: `FOR UPDATE`가 단일 row를 직렬화하므로 RPS를 올려도 처리량이 늘지 않는다. 10,000개 쿠폰을 소진하려면 ~55초가 필요하지만, 테스트 39초 내에 7,201개만 발급.
-2. **거절도 느리다**: 재고가 0이라는 것을 확인하려면 lock을 잡아야 하고, lock을 잡으려면 connection이 필요하다. 거절 요청도 발급과 동일한 경로를 거치면서 p95=8.9s.
-3. **병목은 DB lock + connection pool**: CPU 60~80%로 여유가 있지만, Tomcat threads 200개가 전부 HikariCP connection 대기로 blocking. Tomcat connections(2K/8K)에는 여유가 있어 Tomcat 자체는 병목이 아님.
-4. **대안 검토 완료**: 5가지 대안 검토. 1~4(pool 증가, DB 스펙 업, threads 증가, 앱 플래그)는 직렬화 구조를 바꾸지 못해 기각. 5번(Single UPDATE)은 lock 보유 시간 단축으로 개선 가능하지만 DB 직렬화 + connection pool 한계는 남음. 같은 원자 연산 개념을 인메모리(Redis)로 옮겨야 구조적 돌파가 가능하다.
+**Pessimistic Lock**:
+- 500 RPS 소화 가능, **1,000 RPS에서 붕괴** (38% dropped, VU 2,000 상한)
+- lock 안에서 duplicate check + 로직 처리 → lock 보유 시간이 길고, 거절도 lock을 잡아야 함
+- 병목: DB lock 직렬화 → HikariCP 고갈 → Tomcat thread blocking 체인
 
-**전략 전환**: Step 2(Redis Distributed Lock)에서 lock을 인메모리로 옮겨 "직렬화가 느린 건 DB라서인가, 직렬화 자체가 문제인가"를 검증한다.
+**Single UPDATE**:
+- **1,000 RPS를 VU 54개로 여유롭게 소화** (dropped 0)
+- duplicate check가 lock 밖에서 실행, 거절은 UPDATE 0 rows로 즉시 반환
+- DB 원자 연산의 상한: 같은 row에 대한 X lock 직렬화는 남아있으므로, RPS를 더 올리면 동일 패턴의 병목 예상
+
+**인프라**: t3(버스터블) → m6i/m6g(비버스터블)로 변경하여 CPU 크레딧 문제를 제거하고 신뢰할 수 있는 결과를 확보했다.
+
+**전략 전환**: Step 2(Redis Distributed Lock)에서 "분산 락이 정말 동시성 문제의 해결책인가?"를 검증한다. Step 3(Redis Counter)에서 Single UPDATE와 동일한 원자 연산 개념을 인메모리로 옮겨 DB 직렬화 한계를 넘는다.
