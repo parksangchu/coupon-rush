@@ -6,9 +6,11 @@ import com.couponrush.domain.coupon.exception.CouponExhaustedException;
 import com.couponrush.domain.coupon.exception.DuplicateIssuanceException;
 import com.couponrush.domain.coupon.repository.CouponRepository;
 import com.couponrush.domain.coupon.repository.IssuanceRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,16 @@ public class RedisCounterStrategy implements IssuanceStrategy {
     private static final String COUNTER_KEY_PREFIX = "coupon_counter:";
     private static final String TOTAL_KEY_PREFIX = "coupon_total:";
 
+    private static final DefaultRedisScript<Long> ISSUE_SCRIPT = new DefaultRedisScript<>("""
+            local current = redis.call('INCR', KEYS[1])
+            local total = tonumber(redis.call('GET', KEYS[2]) or '0')
+            if current > total then
+                redis.call('DECR', KEYS[1])
+                return -1
+            end
+            return current
+            """, Long.class);
+
     @Override
     @Transactional
     public Issuance issue(Long couponId, Long userId) {
@@ -31,11 +43,14 @@ public class RedisCounterStrategy implements IssuanceStrategy {
             throw new DuplicateIssuanceException();
         }
 
-        Long issued = redisTemplate.opsForValue().increment(COUNTER_KEY_PREFIX + couponId);
+        initTotalQuantity(couponId);
 
-        int totalQuantity = getTotalQuantity(couponId);
-        if (issued > totalQuantity) {
-            redisTemplate.opsForValue().decrement(COUNTER_KEY_PREFIX + couponId);
+        Long result = redisTemplate.execute(
+            ISSUE_SCRIPT,
+            List.of(COUNTER_KEY_PREFIX + couponId, TOTAL_KEY_PREFIX + couponId)
+        );
+
+        if (result == null || result == -1) {
             throw new CouponExhaustedException();
         }
 
@@ -51,16 +66,13 @@ public class RedisCounterStrategy implements IssuanceStrategy {
         return value == null ? 0 : Integer.parseInt(value);
     }
 
-    private int getTotalQuantity(Long couponId) {
+    private void initTotalQuantity(Long couponId) {
         String key = TOTAL_KEY_PREFIX + couponId;
-        String cached = redisTemplate.opsForValue().get(key);
-        if (cached != null) {
-            return Integer.parseInt(cached);
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
+            return;
         }
-
         Coupon coupon = couponRepository.findById(couponId)
             .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
         redisTemplate.opsForValue().setIfAbsent(key, String.valueOf(coupon.getTotalQuantity()));
-        return coupon.getTotalQuantity();
     }
 }
