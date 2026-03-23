@@ -11,4 +11,12 @@ public record CouponStatusResponse(int total, int issued, int remaining) {
             coupon.remainingQuantity()
         );
     }
+
+    public static CouponStatusResponse of(Coupon coupon, int issuedCount) {
+        return new CouponStatusResponse(
+            coupon.getTotalQuantity(),
+            issuedCount,
+            coupon.getTotalQuantity() - issuedCount
+        );
+    }
 }

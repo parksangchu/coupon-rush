@@ -14,7 +14,7 @@ DB_PASSWORD="${DB_PASSWORD:-CouponRush2026!}"
 
 # redis-lock 전략일 때 Redis endpoint 읽기
 REDIS_OPTS=""
-if [[ "$STRATEGY" == "redis-lock" ]]; then
+if [[ "$STRATEGY" == "redis-lock" ]] || [[ "$STRATEGY" == "redis-counter" ]]; then
   REDIS_ENDPOINT=$(terraform -chdir="$PROJECT_ROOT/terraform" output -raw redis_endpoint)
   REDIS_OPTS="--spring.data.redis.host=${REDIS_ENDPOINT} --spring.data.redis.port=6379"
   echo "Redis endpoint: $REDIS_ENDPOINT"

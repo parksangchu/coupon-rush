@@ -38,8 +38,8 @@
 - [x] 결과 기록 + 대안 검토
 
 ## Step 3: Redis Atomic Counter
-- [ ] RedisCounterStrategy 구현
-- [ ] 통합 테스트
+- [x] RedisCounterStrategy 구현 (RedisTemplate + INCR)
+- [x] 통합 테스트
 - [ ] k6 부하 테스트 (AWS)
 - [ ] 결과 기록 + 대안 검토
 

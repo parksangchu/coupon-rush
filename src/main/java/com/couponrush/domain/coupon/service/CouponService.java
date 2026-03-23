@@ -42,6 +42,6 @@ public class CouponService {
     public CouponStatusResponse getStatus(Long couponId) {
         Coupon coupon = couponRepository.findById(couponId)
             .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
-        return CouponStatusResponse.from(coupon);
+        return CouponStatusResponse.of(coupon, issuanceStrategy.getIssuedCount(couponId));
     }
 }

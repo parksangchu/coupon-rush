@@ -32,4 +32,11 @@ public class PessimisticLockStrategy implements IssuanceStrategy {
 
         return issuanceRepository.save(new Issuance(coupon, userId));
     }
+
+    @Override
+    public int getIssuedCount(Long couponId) {
+        Coupon coupon = couponRepository.findById(couponId)
+            .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
+        return coupon.getIssuedQuantity();
+    }
 }

@@ -54,9 +54,7 @@ abstract class IssuanceStrategyTestBase extends IntegrationTestBase {
         latch.await();
         executor.shutdown();
 
-        Coupon result = couponRepository.findById(coupon.getId()).orElseThrow();
-
-        assertThat(result.getIssuedQuantity()).isEqualTo(totalQuantity);
+        assertThat(issuanceStrategy.getIssuedCount(coupon.getId())).isEqualTo(totalQuantity);
         assertThat(successCount.get()).isEqualTo(totalQuantity);
         assertThat(failCount.get()).isEqualTo(threadCount - totalQuantity);
     }

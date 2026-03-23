@@ -4,4 +4,5 @@ import com.couponrush.domain.coupon.entity.Issuance;
 
 public interface IssuanceStrategy {
     Issuance issue(Long couponId, Long userId);
+    int getIssuedCount(Long couponId);
 }
