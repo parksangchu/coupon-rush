@@ -9,4 +9,5 @@
 | 주제 | 상태 | 최종 수정 |
 |------|------|-----------|
 | [부하 테스트](infra/load-test.md) | resolved | 2026-03-19 |
-| [Pessimistic Lock 부하 테스트](coupon/pessimistic-lock-load-test.md) | in-progress | 2026-03-22 |
+| [Pessimistic Lock 부하 테스트](coupon/pessimistic-lock-load-test.md) | resolved | 2026-03-23 |
+| [Redis Lock 부하 테스트](coupon/redis-lock-load-test.md) | resolved | 2026-03-23 |

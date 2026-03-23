@@ -2,8 +2,8 @@
 
 | 항목 | 내용 |
 |------|------|
-| 상태 | in-progress |
-| 최종 수정 | 2026-03-22 |
+| 상태 | resolved |
+| 최종 수정 | 2026-03-23 |
 
 ## 배경
 
@@ -344,4 +344,4 @@ Step 3: Redis Counter (원자 연산, 인메모리) → ? TPS
 
 **인프라**: t3(버스터블) → m6i/m6g(비버스터블)로 변경하여 CPU 크레딧 문제를 제거하고 신뢰할 수 있는 결과를 확보했다.
 
-**전략 전환**: Step 2(Redis Distributed Lock)에서 "분산 락이 정말 동시성 문제의 해결책인가?"를 검증한다. Step 3(Redis Counter)에서 Single UPDATE와 동일한 원자 연산 개념을 인메모리로 옮겨 DB 직렬화 한계를 넘는다.
+**전략 전환**: Step 2(Redis Lock)에서 분산 락이 lock-data 분리로 인해 DB 락보다 오히려 느려짐을 실측으로 확인했다. 상세 결과는 [Redis Lock 부하 테스트](redis-lock-load-test.md) 참고. Step 3(Redis Counter)에서 락 자체를 제거하고 원자 연산으로 전환한다.
