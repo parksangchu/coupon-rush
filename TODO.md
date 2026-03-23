@@ -40,8 +40,8 @@
 ## Step 3: Redis Atomic Counter
 - [x] RedisCounterStrategy 구현 (RedisTemplate + INCR)
 - [x] 통합 테스트
-- [ ] k6 부하 테스트 (AWS)
-- [ ] 결과 기록 + 대안 검토
+- [x] k6 부하 테스트 (AWS) — 1,000 RPS 최고 성능, 2,000 RPS에서 DB INSERT 병목
+- [x] 결과 기록 + 대안 검토
 
 ## Step 4: Redis Counter + Kafka 비동기 저장
 - [ ] RedisKafkaStrategy 구현
