@@ -31,9 +31,9 @@
 - [x] 서브 퀘스트: 결과 기록
 
 ## Step 2: Redis Distributed Lock
-- [ ] RedisLockStrategy 구현 (Redisson)
-- [ ] Terraform: ElastiCache 추가
-- [ ] 통합 테스트
+- [x] RedisLockStrategy 구현 (Redisson + TransactionTemplate)
+- [x] Terraform: ElastiCache 추가
+- [x] 통합 테스트
 - [ ] k6 부하 테스트 (AWS)
 - [ ] 결과 기록 + 대안 검토
 

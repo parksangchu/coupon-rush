@@ -30,7 +30,6 @@ public class CouponService {
         return couponRepository.findAll();
     }
 
-    @Transactional
     public IssueResponse issue(Long couponId, Long userId) {
         if (userId == null) {
             throw new IllegalArgumentException("userId는 필수입니다");

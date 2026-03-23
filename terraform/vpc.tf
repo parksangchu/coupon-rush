@@ -146,6 +146,31 @@ resource "aws_security_group" "test" {
   }
 }
 
+resource "aws_security_group" "redis" {
+  name_prefix = "${var.project_name}-redis-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "Redis from app"
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [aws_security_group.app.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name    = "${var.project_name}-redis-sg"
+    Project = var.project_name
+  }
+}
+
 resource "aws_security_group" "rds" {
   name_prefix = "${var.project_name}-rds-"
   vpc_id      = aws_vpc.main.id

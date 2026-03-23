@@ -16,6 +16,10 @@ spring:
   sql:
     init:
       mode: never
+  data:
+    redis:
+      host: localhost
+      port: 16379
 
 server:
   port: 8080
@@ -36,3 +40,6 @@ management:
 
 coupon:
   strategy: pessimistic
+  redis-lock:
+    wait-time: 5000
+    lease-time: 10000

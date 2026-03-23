@@ -12,6 +12,14 @@ RDS_ENDPOINT=$(terraform -chdir="$PROJECT_ROOT/terraform" output -raw rds_endpoi
 STRATEGY="${1:-pessimistic}"
 DB_PASSWORD="${DB_PASSWORD:-CouponRush2026!}"
 
+# redis-lock 전략일 때 Redis endpoint 읽기
+REDIS_OPTS=""
+if [[ "$STRATEGY" == "redis-lock" ]]; then
+  REDIS_ENDPOINT=$(terraform -chdir="$PROJECT_ROOT/terraform" output -raw redis_endpoint)
+  REDIS_OPTS="--spring.data.redis.host=${REDIS_ENDPOINT} --spring.data.redis.port=6379"
+  echo "Redis endpoint: $REDIS_ENDPOINT"
+fi
+
 SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no"
 
 echo "=== 1. 빌드 ==="
@@ -32,6 +40,7 @@ ssh $SSH_OPTS "ec2-user@$APP_IP" << REMOTE
     --spring.datasource.username=coupon \
     --spring.datasource.password='${DB_PASSWORD}' \
     --coupon.strategy=${STRATEGY} \
+    ${REDIS_OPTS} \
     > ~/app.log 2>&1 &
 
   # 기동 대기
