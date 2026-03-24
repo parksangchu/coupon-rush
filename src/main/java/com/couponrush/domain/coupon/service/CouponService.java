@@ -2,9 +2,11 @@ package com.couponrush.domain.coupon.service;
 
 import com.couponrush.domain.coupon.dto.CouponStatusResponse;
 import com.couponrush.domain.coupon.dto.IssueResponse;
+import com.couponrush.domain.coupon.dto.VerifyResponse;
 import com.couponrush.domain.coupon.entity.Coupon;
 import com.couponrush.domain.coupon.entity.Issuance;
 import com.couponrush.domain.coupon.repository.CouponRepository;
+import com.couponrush.domain.coupon.repository.IssuanceRepository;
 import com.couponrush.domain.coupon.strategy.IssuanceStrategy;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CouponService {
 
     private final CouponRepository couponRepository;
+    private final IssuanceRepository issuanceRepository;
     private final IssuanceStrategy issuanceStrategy;
 
     public Coupon create(String code, Integer totalQuantity) {
@@ -43,5 +46,14 @@ public class CouponService {
         Coupon coupon = couponRepository.findById(couponId)
             .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
         return CouponStatusResponse.of(coupon, issuanceStrategy.getIssuedCount(couponId));
+    }
+
+    @Transactional(readOnly = true)
+    public VerifyResponse verify(Long couponId) {
+        int strategyCount = issuanceStrategy.getIssuedCount(couponId);
+        long dbCount = issuanceRepository.countByCouponId(couponId);
+        int duplicateCount = issuanceRepository.findDuplicateCounts(couponId).size();
+        boolean consistent = strategyCount == dbCount && duplicateCount == 0;
+        return new VerifyResponse(strategyCount, dbCount, duplicateCount, consistent);
     }
 }

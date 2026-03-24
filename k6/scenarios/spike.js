@@ -73,4 +73,13 @@ export function teardown(data) {
   check(status, {
     'no over-issuance': (s) => s.issued <= s.total,
   });
+
+  const verifyRes = http.get(`${BASE_URL}/api/v1/coupons/${data.couponId}/verify`);
+  const verify = verifyRes.json();
+  console.log(`=== Verify: strategyCount=${verify.strategyCount}, dbCount=${verify.dbCount}, duplicates=${verify.duplicateCount}, consistent=${verify.consistent} ===`);
+
+  check(verify, {
+    'strategy-db consistent': (v) => v.consistent === true,
+    'no duplicates': (v) => v.duplicateCount === 0,
+  });
 }

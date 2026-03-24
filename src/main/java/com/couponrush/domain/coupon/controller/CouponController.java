@@ -7,6 +7,7 @@ import com.couponrush.domain.coupon.dto.CouponStatusResponse;
 import com.couponrush.domain.coupon.dto.CreateCouponRequest;
 import com.couponrush.domain.coupon.dto.IssueRequest;
 import com.couponrush.domain.coupon.dto.IssueResponse;
+import com.couponrush.domain.coupon.dto.VerifyResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -47,5 +48,10 @@ public class CouponController {
     @GetMapping("/{couponId}/status")
     public CouponStatusResponse getStatus(@PathVariable Long couponId) {
         return couponService.getStatus(couponId);
+    }
+
+    @GetMapping("/{couponId}/verify")
+    public VerifyResponse verify(@PathVariable Long couponId) {
+        return couponService.verify(couponId);
     }
 }
