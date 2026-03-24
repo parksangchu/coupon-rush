@@ -6,3 +6,6 @@ spring:
 
 coupon:
   strategy: pessimistic
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic: coupon-issuance

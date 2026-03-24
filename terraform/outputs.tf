@@ -22,3 +22,13 @@ output "redis_endpoint" {
   description = "ElastiCache Redis 엔드포인트"
   value       = aws_elasticache_cluster.redis.cache_nodes[0].address
 }
+
+output "kafka_private_ip" {
+  description = "Kafka EC2 프라이빗 IP"
+  value       = aws_instance.kafka.private_ip
+}
+
+output "kafka_public_ip" {
+  description = "Kafka EC2 퍼블릭 IP (SSH용)"
+  value       = aws_instance.kafka.public_ip
+}

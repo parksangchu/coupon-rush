@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |------|------|
-| 상태 | open |
+| 상태 | in-progress |
 | 최종 수정 | 2026-03-24 |
 
 ## 배경
@@ -70,36 +70,100 @@ Kafka를 우선 구현한다.
 
 Kafka의 dual-write gap 한계를 확인한 뒤, Redis Streams + Lua 원자화를 대안으로 테스트하여 트레이드오프를 비교한다.
 
-### 구현 계획
+### 2026-03-24: 구현 결정 — Redis SET 중복 체크 + Kafka Consumer 설정
 
-**API 흐름 (Producer)**:
-```
-1. existsByCouponIdAndUserId()        ← DB (중복 체크)
-2. INCR coupon_counter:{couponId}     ← Redis (원자 연산)
-3. if issued > totalQuantity:
-     DECR → throw CouponExhaustedException
-4. Kafka produce (couponId, userId)   ← 비동기 발행
-5. produce 실패 시 → DECR 보상 → 에러 반환
-6. API 응답 "발급 성공"               ← DB INSERT 없이 즉시 반환
+**문제/질문**:
+1. Kafka 비동기 전략에서 DB 기반 중복 체크(`existsByCouponIdAndUserId`)가 동작하지 않음 — Consumer가 아직 INSERT 안 했을 수 있어 같은 유저의 두 번째 요청이 통과
+2. Step 2와 Step 3의 공정한 비교를 위해 동일 조건 필요
+3. Kafka Consumer의 메시지 유실 방지 설정
+
+**검토한 선택지와 결정**:
+
+#### 1. 중복 체크: DB → Redis SET
+
+Redis SET(`SADD`)을 Lua 스크립트에 통합하여 중복 체크 + INCR + 수량 체크를 원자 실행:
+
+```lua
+-- Keys: counter_key, total_key, users_key / Args: userId
+local added = redis.call('SADD', KEYS[3], ARGV[1])
+if added == 0 then return -2 end          -- 중복
+local current = redis.call('INCR', KEYS[1])
+local total = tonumber(redis.call('GET', KEYS[2]) or '0')
+if current > total then
+    redis.call('DECR', KEYS[1])
+    redis.call('SREM', KEYS[3], ARGV[1])  -- SADD 롤백
+    return -1                               -- 소진
+end
+return current
 ```
 
-**Consumer 흐름**:
+Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **API 경로에서 DB 완전 분리** (initTotalQuantity 캐싱 이후).
+
+#### 2. 카운터 복구: 구현 안 함
+
+- 동기 전략(Step 2): Redis 재시작 시 DB에서 `countByCouponId`로 복구 가능
+- 비동기 전략(Step 3): Consumer lag 때문에 DB count < 실제 발급 수 → 복구하면 초과발급 위험
+  - 예: Redis 죽고 복구 → DB count 9,950 (consumer 50개 미처리) → 카운터 9,950으로 복구 → 50명 추가 통과 → 최종 10,050건 (초과)
+- 공정 비교를 위해 **둘 다 구현 안 함**. 프로덕션 관심사로만 정리.
+
+#### 3. Kafka Producer 설정
+
+| 설정 | 값 | 이유 |
+|------|-----|------|
+| `acks` | `all` | ISR 전체 확인. 단일 브로커라 acks=1과 동일하지만 의도 표현 |
+| `enable.idempotence` | `true` | Producer→Broker 구간 중복 방지 |
+| produce 방식 | `.send().get()` (동기) | 실패 시 DECR+SREM 보상 실행 가능. 비동기면 보상 타이밍 복잡 |
+
+#### 4. Kafka Consumer 설정
+
+| 설정 | 값 | 이유 |
+|------|-----|------|
+| `AckMode` | `RECORD` | 메시지 하나 처리 완료 후 offset 커밋 → DB INSERT 성공 보장 |
+| `ErrorHandlingDeserializer` | 적용 | poison pill 방어 (역직렬화 실패 시 Consumer 멈춤 방지) |
+| `DefaultErrorHandler` | 1초 간격 3회 retry | DB 일시 장애 대응 |
+| `DeadLetterPublishingRecoverer` | `{topic}-dlt`로 발행 | retry 소진 시 메시지 보존 |
+| `DataIntegrityViolationException` | non-retryable | 중복(unique constraint)은 재시도 불필요 |
+
+#### 5. 인프라: MSK → EC2 Kafka
+
+| 옵션 | 월 비용 |
+|------|---------|
+| MSK Serverless | ~$551 |
+| MSK Provisioned (최소 2 브로커) | ~$69 |
+| **EC2 t3.small 1대** | **~$16** |
+
+테스트 프로젝트에 MSK는 과함. EC2에 Kafka 3.8.0 직접 설치 (KRaft 모드, ZooKeeper 불필요).
+
+**결과**: 구현 완료, 통합 테스트 16개 전체 통과.
+
+### 구현된 API 흐름
+
+**Producer (KafkaStrategy)**:
 ```
-1. Kafka consume (couponId, userId)
-2. 멱등성 체크 (중복 INSERT 방지)
-3. DB INSERT (Issuance 레코드)
-4. 실패 시 재시도, 최종 실패 → DLQ
+1. initTotalQuantity(couponId)              ← Redis setIfAbsent (캐싱)
+2. Lua: SADD(중복) + INCR(카운팅) + total 체크 ← Redis 원자 연산
+3. kafkaTemplate.send().get()               ← Kafka produce (동기)
+4. 실패 시 DECR + SREM 보상              ← Redis 보상
+5. Coupon 로드 → transient Issuance 반환    ← id=null (DB INSERT 전)
 ```
 
-**측정 항목**:
+**Consumer (IssuanceConsumer)**:
+```
+1. Kafka consume (IssuanceMessage)
+2. Coupon 로드 → Issuance 생성 + save      ← DB INSERT
+3. unique constraint 위반 → non-retryable → DLT
+4. 기타 실패 → 3회 retry → DLT
+```
+
+**측정 항목** (부하 테스트 시):
 - Step 2 대비 TPS, p99 latency
 - Kafka Consumer lag (DB 반영 지연)
 - DB 쓰기 부하 (Step 2 대비)
-- publish 실패율
-- INCR↔publish gap 발생 빈도
+- produce 실패율
+- INCR↔produce gap 발생 빈도
 
 **대안 검토 예정**: Kafka 테스트 후 Redis Streams + Lua 원자화 (INCR+XADD 단일 스크립트)
 
 ## 현재 결론
 
-방식 선택 완료. Kafka 우선 구현 → 한계 확인 → Redis Streams 대안 검토 순서로 진행.
+Kafka 구현 완료, 통합 테스트 통과. AWS 배포 + 부하 테스트 대기 중.

@@ -12,12 +12,18 @@ RDS_ENDPOINT=$(terraform -chdir="$PROJECT_ROOT/terraform" output -raw rds_endpoi
 STRATEGY="${1:-pessimistic}"
 DB_PASSWORD="${DB_PASSWORD:-CouponRush2026!}"
 
-# redis-lock 전략일 때 Redis endpoint 읽기
+# Redis/Kafka endpoint 읽기
 REDIS_OPTS=""
-if [[ "$STRATEGY" == "redis-lock" ]] || [[ "$STRATEGY" == "redis-counter" ]]; then
+KAFKA_OPTS=""
+if [[ "$STRATEGY" == "redis-lock" ]] || [[ "$STRATEGY" == "redis-counter" ]] || [[ "$STRATEGY" == "kafka" ]]; then
   REDIS_ENDPOINT=$(terraform -chdir="$PROJECT_ROOT/terraform" output -raw redis_endpoint)
   REDIS_OPTS="--spring.data.redis.host=${REDIS_ENDPOINT} --spring.data.redis.port=6379"
   echo "Redis endpoint: $REDIS_ENDPOINT"
+fi
+if [[ "$STRATEGY" == "kafka" ]]; then
+  KAFKA_IP=$(terraform -chdir="$PROJECT_ROOT/terraform" output -raw kafka_private_ip)
+  KAFKA_OPTS="--coupon.kafka.bootstrap-servers=${KAFKA_IP}:9092"
+  echo "Kafka endpoint: $KAFKA_IP:9092"
 fi
 
 SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no"
@@ -41,6 +47,7 @@ ssh $SSH_OPTS "ec2-user@$APP_IP" << REMOTE
     --spring.datasource.password='${DB_PASSWORD}' \
     --coupon.strategy=${STRATEGY} \
     ${REDIS_OPTS} \
+    ${KAFKA_OPTS} \
     > ~/app.log 2>&1 &
 
   # 기동 대기

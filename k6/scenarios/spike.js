@@ -1,5 +1,5 @@
 import http from 'k6/http';
-import { check } from 'k6';
+import { check, sleep } from 'k6';
 import { Trend, Counter } from 'k6/metrics';
 import { BASE_URL } from '../lib/config.js';
 
@@ -74,8 +74,15 @@ export function teardown(data) {
     'no over-issuance': (s) => s.issued <= s.total,
   });
 
-  const verifyRes = http.get(`${BASE_URL}/api/v1/coupons/${data.couponId}/verify`);
-  const verify = verifyRes.json();
+  // Kafka 비동기 전략: Consumer 처리 대기 (동기 전략은 즉시 통과)
+  let verify;
+  for (let i = 0; i < 15; i++) {
+    const verifyRes = http.get(`${BASE_URL}/api/v1/coupons/${data.couponId}/verify`);
+    verify = verifyRes.json();
+    if (verify.consistent) break;
+    console.log(`=== Verify: waiting for consumer... (attempt ${i + 1}, dbCount=${verify.dbCount}/${verify.strategyCount}) ===`);
+    sleep(2);
+  }
   console.log(`=== Verify: strategyCount=${verify.strategyCount}, dbCount=${verify.dbCount}, duplicates=${verify.duplicateCount}, consistent=${verify.consistent} ===`);
 
   check(verify, {

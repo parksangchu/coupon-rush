@@ -171,6 +171,39 @@ resource "aws_security_group" "redis" {
   }
 }
 
+resource "aws_security_group" "kafka" {
+  name_prefix = "${var.project_name}-kafka-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "Kafka from app"
+    from_port       = 9092
+    to_port         = 9092
+    protocol        = "tcp"
+    security_groups = [aws_security_group.app.id]
+  }
+
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name    = "${var.project_name}-kafka-sg"
+    Project = var.project_name
+  }
+}
+
 resource "aws_security_group" "rds" {
   name_prefix = "${var.project_name}-rds-"
   vpc_id      = aws_vpc.main.id

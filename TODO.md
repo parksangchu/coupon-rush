@@ -46,10 +46,11 @@
 
 ## Step 3: Redis + Queue + DB
 ### Kafka (메인)
-- [ ] KafkaStrategy 구현 (Redis INCR + Kafka produce + 실패 시 DECR 보상)
-- [ ] Kafka Consumer 구현 (DB INSERT + 멱등성 처리)
-- [ ] Terraform: MSK 추가
-- [ ] 통합 테스트
+- [x] KafkaStrategy 구현 (Redis Lua SADD+INCR + Kafka produce + 실패 시 DECR/SREM 보상)
+- [x] Kafka Consumer 구현 (DB INSERT + 멱등성 처리)
+- [x] RedisCounterStrategy 중복 체크를 Redis SET으로 변경 (공정 비교)
+- [x] Terraform: EC2 Kafka 추가 (MSK 대신 직접 설치, ~$16/월)
+- [x] 통합 테스트 (16개 전체 통과)
 - [ ] k6 부하 테스트 (AWS)
 - [ ] 결과 기록 + Kafka dual-write gap 분석
 

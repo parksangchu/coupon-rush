@@ -1,47 +1,39 @@
 package com.couponrush.domain.coupon.strategy;
 
+import static com.couponrush.domain.coupon.strategy.RedisCounterStrategy.COUNTER_KEY_PREFIX;
+import static com.couponrush.domain.coupon.strategy.RedisCounterStrategy.ISSUE_SCRIPT;
+import static com.couponrush.domain.coupon.strategy.RedisCounterStrategy.TOTAL_KEY_PREFIX;
+import static com.couponrush.domain.coupon.strategy.RedisCounterStrategy.USERS_KEY_PREFIX;
+
+import com.couponrush.domain.coupon.dto.IssuanceMessage;
 import com.couponrush.domain.coupon.entity.Coupon;
 import com.couponrush.domain.coupon.entity.Issuance;
 import com.couponrush.domain.coupon.exception.CouponExhaustedException;
 import com.couponrush.domain.coupon.exception.DuplicateIssuanceException;
 import com.couponrush.domain.coupon.repository.CouponRepository;
-import com.couponrush.domain.coupon.repository.IssuanceRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Component
-@ConditionalOnProperty(name = "coupon.strategy", havingValue = "redis-counter")
+@ConditionalOnProperty(name = "coupon.strategy", havingValue = "kafka")
 @RequiredArgsConstructor
-public class RedisCounterStrategy implements IssuanceStrategy {
+public class KafkaStrategy implements IssuanceStrategy {
 
     private final StringRedisTemplate redisTemplate;
     private final CouponRepository couponRepository;
-    private final IssuanceRepository issuanceRepository;
+    private final KafkaTemplate<String, IssuanceMessage> kafkaTemplate;
 
-    static final String COUNTER_KEY_PREFIX = "coupon_counter:";
-    static final String TOTAL_KEY_PREFIX = "coupon_total:";
-    static final String USERS_KEY_PREFIX = "coupon_users:";
-
-    static final DefaultRedisScript<Long> ISSUE_SCRIPT = new DefaultRedisScript<>("""
-            local added = redis.call('SADD', KEYS[3], ARGV[1])
-            if added == 0 then return -2 end
-            local current = redis.call('INCR', KEYS[1])
-            local total = tonumber(redis.call('GET', KEYS[2]) or '0')
-            if current > total then
-                redis.call('DECR', KEYS[1])
-                redis.call('SREM', KEYS[3], ARGV[1])
-                return -1
-            end
-            return current
-            """, Long.class);
+    @Value("${coupon.kafka.topic}")
+    private String topic;
 
     @Override
-    @Transactional
     public Issuance issue(Long couponId, Long userId) {
         initTotalQuantity(couponId);
 
@@ -62,10 +54,19 @@ public class RedisCounterStrategy implements IssuanceStrategy {
             throw new CouponExhaustedException();
         }
 
+        try {
+            kafkaTemplate.send(topic, String.valueOf(couponId), new IssuanceMessage(couponId, userId)).get();
+        } catch (Exception e) {
+            // 보상: DECR + SREM
+            redisTemplate.opsForValue().decrement(COUNTER_KEY_PREFIX + couponId);
+            redisTemplate.opsForSet().remove(USERS_KEY_PREFIX + couponId, String.valueOf(userId));
+            throw new RuntimeException("Kafka 발행 실패, 보상 완료", e);
+        }
+
         Coupon coupon = couponRepository.findById(couponId)
             .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
 
-        return issuanceRepository.save(new Issuance(coupon, userId));
+        return new Issuance(coupon, userId);
     }
 
     @Override
