@@ -55,7 +55,10 @@ public class RedisCounterStrategy implements IssuanceStrategy {
             String.valueOf(userId)
         );
 
-        if (result == null || result == -2) {
+        if (result == null) {
+            throw new RuntimeException("Redis Lua 스크립트 실행 실패");
+        }
+        if (result == -2) {
             throw new DuplicateIssuanceException();
         }
         if (result == -1) {
