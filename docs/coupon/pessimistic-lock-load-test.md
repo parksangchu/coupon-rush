@@ -174,10 +174,10 @@ Pessimistic Lock의 요청 처리 흐름은 다음과 같다:
    - 200개가 busy인 이유가 CPU 작업이 아니라 HikariCP connection 대기(I/O blocking)
    - 500으로 늘려도 500개가 connection 대기로 blocking될 뿐
 
-4. **앱 레벨 재고 소진 플래그** → 기각 (단, 발상은 Step 3로 이어짐)
+4. **앱 레벨 재고 소진 플래그** → 기각 (단, 발상은 Step 2의 Redis Counter로 이어짐)
    - 거절 성능은 개선되지만, 발급 구간 ~182 TPS는 해결 안 됨
    - 멀티 인스턴스면 플래그 동기화 필요 → 결국 외부 저장소(Redis) 필요
-   - 이 발상을 확장하면 Step 3(Redis Atomic Counter)
+   - 이 발상을 확장하면 Step 2의 Redis Counter
 
 5. **Single UPDATE로 전환** (`UPDATE ... SET quantity = quantity - 1 WHERE quantity > 0`) → 기각 (단, 개선은 됨)
    - SELECT FOR UPDATE는 lock을 잡고 → 로직 처리 → UPDATE → COMMIT까지 lock을 보유. Single UPDATE는 한 문장에서 lock 획득과 수정이 끝나므로 lock 보유 시간이 훨씬 짧다
@@ -205,9 +205,9 @@ Pessimistic Lock의 요청 처리 흐름은 다음과 같다:
 ```
 Step 1: DB Lock (직렬화, 디스크) → ~182 TPS
   ↓ "lock이 느린 건가, 직렬화 자체가 문제인가?"
-Step 2: Redis Lock (직렬화, 인메모리) → ? TPS
+Step 2a: Redis Lock (직렬화, 인메모리) → ? TPS
   ↓ "직렬화 자체가 문제라면?"
-Step 3: Redis Counter (직렬화 제거, 원자 연산) → ? TPS
+Step 2b: Redis Counter (직렬화 제거, 원자 연산) → ? TPS
 ```
 
 **결정과 이유**: 5가지 대안을 검토한 결과, 1~4는 직렬화 구조를 바꾸지 못한다. 5번(Single UPDATE)은 lock 보유 시간을 줄여 실질적 개선이 가능하지만, DB 직렬화 + connection pool 한계는 남는다. 같은 "원자 연산" 개념을 인메모리로 옮기면 이 한계를 넘을 수 있다 → Redis로 전환한다. 단, Single UPDATE는 실측 없이 기각하기엔 아깝다. "DB 원자 연산의 상한"을 숫자로 확인하기 위해 구현 + 부하 테스트를 진행한다.
@@ -324,8 +324,8 @@ Single UPDATE는 DB 내에서 할 수 있는 최선이다. 1,000 RPS를 VU 54개
 Step 1: Pessimistic Lock (직렬화, 디스크) → 500 RPS 소화, 1,000 RPS에서 붕괴
 Step 1 서브: Single UPDATE (원자 연산, 디스크) → 1,000 RPS 여유, DB 원자 연산의 상한
   ↓ "같은 원자 연산을 인메모리로 옮기면?"
-Step 2: Redis Lock (직렬화, 인메모리) → 분산 락의 한계 검증
-Step 3: Redis Counter (원자 연산, 인메모리) → ? TPS
+Step 2a: Redis Lock (직렬화, 인메모리) → 분산 락의 한계 검증
+Step 2b: Redis Counter (원자 연산, 인메모리) → ? TPS
 ```
 
 ## 현재 결론
@@ -344,4 +344,4 @@ Step 3: Redis Counter (원자 연산, 인메모리) → ? TPS
 
 **인프라**: t3(버스터블) → m6i/m6g(비버스터블)로 변경하여 CPU 크레딧 문제를 제거하고 신뢰할 수 있는 결과를 확보했다.
 
-**전략 전환**: Step 2(Redis Lock)에서 분산 락이 lock-data 분리로 인해 DB 락보다 오히려 느려짐을 실측으로 확인했다. 상세 결과는 [Redis Lock 부하 테스트](redis-lock-load-test.md) 참고. Step 3(Redis Counter)에서 락 자체를 제거하고 원자 연산으로 전환한다.
+**전략 전환**: Redis Lock에서 분산 락이 lock-data 분리로 인해 DB 락보다 오히려 느려짐을 실측으로 확인했다. 상세 결과는 [Redis Lock 부하 테스트](redis-lock-load-test.md) 참고. Redis Counter에서 락 자체를 제거하고 원자 연산으로 전환한다.

@@ -30,26 +30,34 @@
 - [x] 서브 퀘스트: Single UPDATE vs Pessimistic Lock AWS 부하 테스트 (1,000 RPS)
 - [x] 서브 퀘스트: 결과 기록
 
-## Step 2: Redis Distributed Lock
+## Step 2: DB + Redis
+### Redis Distributed Lock
 - [x] RedisLockStrategy 구현 (Redisson + TransactionTemplate)
 - [x] Terraform: ElastiCache 추가
 - [x] 통합 테스트
 - [x] k6 부하 테스트 (AWS) — 500/1,000 RPS 모두 붕괴, DB 락보다 악화
 - [x] 결과 기록 + 대안 검토
 
-## Step 3: Redis Atomic Counter
+### Redis Atomic Counter
 - [x] RedisCounterStrategy 구현 (RedisTemplate + INCR)
 - [x] 통합 테스트
 - [x] k6 부하 테스트 (AWS) — 1,000 RPS 최고 성능, 2,000 RPS에서 DB INSERT 병목
 - [x] 결과 기록 + 대안 검토
 
-## Step 4: Redis Counter + Kafka 비동기 저장
-- [ ] RedisKafkaStrategy 구현
-- [ ] Kafka Consumer 구현
-- [ ] Terraform: EC2(Kafka) 추가
+## Step 3: Redis + Queue + DB
+### Kafka (메인)
+- [ ] KafkaStrategy 구현 (Redis INCR + Kafka produce + 실패 시 DECR 보상)
+- [ ] Kafka Consumer 구현 (DB INSERT + 멱등성 처리)
+- [ ] Terraform: MSK 추가
 - [ ] 통합 테스트
 - [ ] k6 부하 테스트 (AWS)
-- [ ] 결과 기록 + 대안 검토
+- [ ] 결과 기록 + Kafka dual-write gap 분석
+
+### Redis Streams (대안 검토)
+- [ ] RedisStreamsStrategy 구현 (Lua: INCR + XADD 원자화)
+- [ ] Redis Streams Consumer 구현
+- [ ] k6 부하 테스트 (AWS)
+- [ ] Kafka vs Redis Streams 트레이드오프 기록
 
 ## 마무리
 - [ ] docs/strategy-comparison.md 작성
