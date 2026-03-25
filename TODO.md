@@ -62,4 +62,4 @@
 
 ## 마무리
 - [x] docs/strategy-comparison.md 작성
-- [ ] README.md 작성
+- [x] README.md 작성
