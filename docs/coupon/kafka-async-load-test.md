@@ -162,7 +162,7 @@ Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **A
 
 **대안 검토 예정**: Kafka 테스트 후 Redis Streams + Lua 원자화 (INCR+XADD 단일 스크립트)
 
-### 2026-03-25: 부하 테스트 — Kafka vs Redis Counter
+### 2026-03-25: 부하 테스트 1차 — Kafka vs Redis Counter (Coupon 조회 포함)
 
 **문제/질문**: DB 저장을 비동기로 분리하면 처리량이 실제로 올라가는가?
 
@@ -170,6 +170,7 @@ Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **A
 - 인프라: App EC2 m6i.large, Kafka EC2 m6i.large (Docker), RDS db.m6g.large, ElastiCache
 - 쿠폰 10,000장, 30초간 부하
 - Redis Counter도 Redis SET 중복 체크로 변경하여 공정 비교 (DB existsBy 제거)
+- 비동기 전략에서 API 응답용 Coupon 조회가 남아 있었음 (매 요청마다 DB SELECT 1회)
 
 **결과**:
 
@@ -189,11 +190,6 @@ Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **A
 | 2,000 | 29,577 | 34,372 | +16% |
 | 3,000 | 29,532 | 40,796 | +38% |
 
-#### 정합성
-
-- 전 구간 정합성 100%: 초과발급 0, 중복 0
-- Kafka 메시지 유실 0건: 10,000건 전부 DB 반영 확인
-
 #### Grafana 관측
 
 | 항목 | Redis Counter | Kafka |
@@ -203,20 +199,81 @@ Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **A
 | HikariCP Pending | **200** | **80** |
 | Tomcat Threads | 200 포화 | 200 포화 |
 
+**분석**: DB를 비동기로 분리한 효과는 있지만 (latency 15~30% 개선, 처리량 +38%), 비동기 전략에서 API 응답용 Coupon 조회가 남아 있어 DB를 완전히 분리하지 못한 상태였다.
+
+### 2026-03-25: 리팩토링 — IssuanceStrategy.issue() void 반환
+
+**문제/질문**: 비동기 전략에서 API 응답용 Coupon 조회가 매 요청마다 DB를 치고 있었음. DB를 API 경로에서 완전히 분리해야 정확한 비교가 가능.
+
+**결정**: `IssuanceStrategy.issue()` 반환 타입을 `Issuance` → `void`로 변경. 비동기 전략에서 Coupon 조회 + transient Issuance 생성 제거. 실무에서는 동기/비동기 전략의 API 응답이 달라야 하지만, 전략 간 성능 비교 목적의 프로젝트이므로 전 전략 공통으로 void 반환.
+
+### 2026-03-25: 부하 테스트 2차 — Kafka vs Redis Streams (DB 완전 분리)
+
+**테스트 조건**:
+- 인프라: App EC2 m6i.large, Kafka EC2 m6i.large (Docker), RDS db.m6g.large, ElastiCache
+- 쿠폰 10,000장, 30초간 부하
+- Coupon 조회 제거 → 비동기 전략의 API 경로에서 DB 완전 분리
+- Redis Counter 결과는 1차와 동일 (동기 전략이라 void 변경의 성능 영향 없음)
+
+**결과**:
+
+#### 발급 Latency (p95)
+
+| RPS | Redis Counter | Kafka | Redis Streams |
+|-----|--------------|-------|---------------|
+| 1,000 | 3,655ms | 1,180ms | **432ms** |
+| 2,000 | 4,637ms | 9.9ms | **1.7ms** |
+| 3,000 | 4,306ms | 8.7ms | **1.1ms** |
+| 5,000 | - | 13.9ms | 1,752ms (붕괴) |
+| 7,000 | - | 17.7ms | - |
+| 10,000 | - | 458ms (붕괴) | - |
+
+#### 처리량 (iterations)
+
+| RPS | Redis Counter | Kafka | Redis Streams |
+|-----|--------------|-------|---------------|
+| 1,000 | 24,470 | 28,819 | 29,461 |
+| 2,000 | 29,577 | 59,998 | **59,979** |
+| 3,000 | 29,532 | 89,891 | **89,906** |
+| 5,000 | - | 147,270 | 57,330 (붕괴) |
+| 7,000 | - | 201,156 | - |
+| 10,000 | - | 205,595 (포화) | - |
+
+#### VU 사용량
+
+| RPS | Redis Counter | Kafka | Redis Streams |
+|-----|--------------|-------|---------------|
+| 2,000 | 2,000 (포화) | 102 | 101 |
+| 3,000 | 2,000 (포화) | 101 | 102 |
+| 5,000 | - | 439 | 2,000 (포화) |
+| 7,000 | - | 745 | - |
+| 10,000 | - | 2,000 (포화) | - |
+
+#### 정합성
+
+- 전 구간, 전 전략 정합성 100%: 초과발급 0, 중복 0
+- Kafka/Redis Streams 메시지 유실 0건: 10,000건 전부 DB 반영 확인
+
 #### Consumer Lag
 
-Kafka Consumer 처리 속도: 약 초당 120건. 10,000건 완료까지 약 80~90초 소요. 테스트 종료(30초) 후 추가 57초 대기 필요.
+Kafka, Redis Streams 모두 Consumer 처리 속도 약 초당 120건. 10,000건 완료까지 약 80~90초 소요.
+
+#### Grafana 관측 (2차)
+
+| 항목 | Kafka 3,000 RPS | Kafka 10,000 RPS | Redis Streams 3,000 RPS | Redis Streams 5,000 RPS |
+|------|----------------|-----------------|------------------------|------------------------|
+| CPU | ~90% | 100% | ~80% | 100% |
+| HikariCP Pending | 0 | 0 | 0 | 0 |
+| Tomcat Threads busy | ~50 | 200 (포화) | ~10 | 200 (포화) |
 
 **분석**:
 
-1. **DB 분리 효과는 있다**: HikariCP Pending 200→80, Latency 15~30% 개선, 3,000 RPS에서 처리량 +38%.
-2. **하지만 병목이 이동했을 뿐이다**: 둘 다 CPU 100%. Redis Counter는 DB INSERT가 병목이었지만, Kafka는 Redis Lua + Kafka produce 자체가 CPU를 소진. 단일 앱 인스턴스의 CPU가 천장.
-3. **Redis Counter는 2,000→3,000 RPS에서 처리량이 정체** (29,577→29,532). DB INSERT가 발목을 잡아 RPS를 올려도 throughput이 안 늘어남.
-4. **Kafka는 3,000 RPS에서도 처리량이 증가** (34,372→40,796). DB가 API 경로에 없으니 더 많은 요청을 소화할 수 있음.
-5. **Consumer lag은 트레이드오프**: API는 빠르지만 DB 반영에 80~90초 지연. "발급 성공인데 기록 조회 안 됨" 시나리오 발생 가능.
-
-**결론**: Kafka로 DB를 분리하면 처리량과 latency 모두 개선되지만, 단일 인스턴스 CPU 한계를 넘을 수는 없다. 다음 단계는 앱 수평 확장이며, 이는 이 프로젝트 범위를 넘어간다.
+1. **Coupon 조회 제거 효과가 극적이다**: Kafka 발급 p(95)가 3,950ms → 9.9ms로 급감 (2,000 RPS 기준). 매 요청마다 DB SELECT 1회가 2,000 RPS에서는 치명적 병목이었음.
+2. **Redis Streams는 저~중 RPS에서 압도적이다**: 3,000 RPS까지 p(95) 1ms대. Lua 스크립트 내에서 XADD까지 원자 실행하므로 네트워크 왕복이 없음.
+3. **하지만 Redis Streams는 5,000 RPS에서 급격히 붕괴한다**: Redis 단일 스레드가 병목. Lua 스크립트(SADD + INCR + GET + XADD)가 길어서 다른 요청이 대기.
+4. **Kafka는 7,000 RPS까지 안정적이다**: Kafka produce는 네트워크 I/O 기반이라 앱 CPU를 덜 먹음. 10,000 RPS에서야 붕괴.
+5. **Kafka의 실질적 천장은 ~7,000 RPS, Redis Streams는 ~4,000 RPS**: 단일 앱 인스턴스 + 단일 Redis/Kafka 브로커 기준.
 
 ## 현재 결론
 
-Kafka 비동기 저장은 Redis Counter 대비 latency 15~30% 개선, 처리량 최대 38% 향상. DB를 API 경로에서 분리한 효과가 확인됐다. 그러나 단일 앱 인스턴스의 CPU 100% 병목은 해소하지 못했다. 병목이 DB INSERT → Redis + Kafka produce로 이동했을 뿐이며, 근본적 해결은 앱 수평 확장이 필요하다.
+DB를 API 경로에서 완전히 분리하면 비동기 전략 모두 극적인 성능 향상을 보인다. Redis Streams는 3,000 RPS까지 가장 빠르고 (p95 1ms) 원자성도 보장하지만, Redis 단일 스레드 한계로 5,000 RPS에서 붕괴한다. Kafka는 latency는 약간 높지만 (p95 ~10ms) 7,000 RPS까지 안정적이다. 선택 기준은 예상 트래픽 규모와 원자성 요구사항에 따라 달라진다.

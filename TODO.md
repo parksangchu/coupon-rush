@@ -55,10 +55,10 @@
 - [x] 결과 기록 — latency 15~30% 개선, 처리량 최대 +38%, CPU 병목은 미해소
 
 ### Redis Streams (대안 검토)
-- [ ] RedisStreamsStrategy 구현 (Lua: INCR + XADD 원자화)
-- [ ] Redis Streams Consumer 구현
-- [ ] k6 부하 테스트 (AWS)
-- [ ] Kafka vs Redis Streams 트레이드오프 기록
+- [x] RedisStreamsStrategy 구현 (Lua: SADD+INCR+XADD 원자화)
+- [x] Redis Streams Consumer 구현 (StreamMessageListenerContainer)
+- [x] k6 부하 테스트 (AWS) — 1K~5K RPS, 4,000 RPS에서 한계
+- [x] Kafka vs Redis Streams 트레이드오프 기록 — Streams는 3K까지 압도적(p95 1ms), Kafka는 7K까지 안정
 
 ## 마무리
 - [ ] docs/strategy-comparison.md 작성
