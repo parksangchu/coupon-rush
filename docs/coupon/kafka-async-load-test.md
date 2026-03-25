@@ -131,7 +131,7 @@ Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **A
 | MSK Provisioned (최소 2 브로커) | ~$69 |
 | **EC2 m6i.large 1대** | **~$70** |
 
-테스트 프로젝트에 MSK는 과함. EC2 m6i.large에 Docker로 `apache/kafka:3.8.0` 실행 (KRaft 모드, ZooKeeper 불필요). 초기에는 직접 설치를 시도했으나 Apache 미러 다운로드 실패로 Docker 방식으로 전환.
+초기 계획은 EC2 t3.small(~$16)에 직접 설치였으나, CPU 크레딧 문제로 m6i.large로 변경하면서 비용 이점이 사라졌다. Apache 미러 다운로드 실패로 Docker 방식으로 전환. 프로덕션이라면 동일 비용에 운영 부담 없는 MSK Provisioned가 적합하다.
 
 **결과**: 구현 완료, 통합 테스트 16개 전체 통과.
 
