@@ -58,7 +58,7 @@ public class KafkaStrategy implements IssuanceStrategy {
         }
 
         try {
-            kafkaTemplate.send(topic, String.valueOf(couponId), new IssuanceMessage(couponId, userId)).get();
+            kafkaTemplate.send(topic, String.valueOf(userId), new IssuanceMessage(couponId, userId)).get();
         } catch (Exception e) {
             // 보상: DECR + SREM
             redisTemplate.opsForValue().decrement(COUNTER_KEY_PREFIX + couponId);
