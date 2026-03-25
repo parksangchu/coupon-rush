@@ -38,7 +38,7 @@ public class CouponService {
             throw new IllegalArgumentException("userId는 필수입니다");
         }
         Issuance issuance = issuanceStrategy.issue(couponId, userId);
-        return IssueResponse.from(issuance);
+        return issuance == null ? IssueResponse.pending() : IssueResponse.from(issuance);
     }
 
     @Transactional(readOnly = true)

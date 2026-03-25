@@ -66,10 +66,7 @@ public class KafkaStrategy implements IssuanceStrategy {
             throw new RuntimeException("Kafka 발행 실패, 보상 완료", e);
         }
 
-        Coupon coupon = couponRepository.findById(couponId)
-            .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
-
-        return new Issuance(coupon, userId);
+        return null;
     }
 
     @Override

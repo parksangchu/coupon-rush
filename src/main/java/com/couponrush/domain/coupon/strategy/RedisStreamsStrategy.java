@@ -74,10 +74,7 @@ public class RedisStreamsStrategy implements IssuanceStrategy {
             throw new CouponExhaustedException();
         }
 
-        Coupon coupon = couponRepository.findById(couponId)
-            .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
-
-        return new Issuance(coupon, userId);
+        return null;
     }
 
     @Override
