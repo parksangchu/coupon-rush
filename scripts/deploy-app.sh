@@ -15,7 +15,7 @@ DB_PASSWORD="${DB_PASSWORD:-CouponRush2026!}"
 # Redis/Kafka endpoint 읽기
 REDIS_OPTS=""
 KAFKA_OPTS=""
-if [[ "$STRATEGY" == "redis-lock" ]] || [[ "$STRATEGY" == "redis-counter" ]] || [[ "$STRATEGY" == "kafka" ]]; then
+if [[ "$STRATEGY" == "redis-lock" ]] || [[ "$STRATEGY" == "redis-counter" ]] || [[ "$STRATEGY" == "kafka" ]] || [[ "$STRATEGY" == "redis-streams" ]]; then
   REDIS_ENDPOINT=$(terraform -chdir="$PROJECT_ROOT/terraform" output -raw redis_endpoint)
   REDIS_OPTS="--spring.data.redis.host=${REDIS_ENDPOINT} --spring.data.redis.port=6379"
   echo "Redis endpoint: $REDIS_ENDPOINT"
