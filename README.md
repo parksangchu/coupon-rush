@@ -30,7 +30,7 @@ Redis가 동시성 제어, DB가 데이터 저장.
 | Redis Lock | Redisson 분산 락 | 13,053ms | - | 붕괴. lock-data 분리로 DB 락보다 느림 |
 | Redis Counter | Lua (INCR 원자 연산) | 3,655ms | 4,637ms (붕괴) | 2,000 RPS에서 한계 |
 
-Redis Counter는 **락 없이** INCR 원자 연산으로 동시성 해결. Redis 자체는 빠르지만, 발급 성공 시 **DB INSERT가 동기로 실행**되어 병목이 된다. 2,000 RPS에서 HikariCP Pending 200, CPU 100%.
+Redis Counter는 **락 없이** INCR 원자 연산으로 동시성 해결. 거절(전체 요청의 90% 이상)이 Redis에서만 처리되어 DB 부하가 크게 줄어든다. 하지만 발급 성공 시 **DB INSERT가 동기로 실행**되어 여전히 병목. 2,000 RPS에서 HikariCP Pending 200, CPU 100%.
 
 → DB를 API 경로에서 분리
 
