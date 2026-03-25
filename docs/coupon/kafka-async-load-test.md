@@ -2,8 +2,8 @@
 
 | 항목 | 내용 |
 |------|------|
-| 상태 | in-progress |
-| 최종 수정 | 2026-03-24 |
+| 상태 | resolved |
+| 최종 수정 | 2026-03-25 |
 
 ## 배경
 
@@ -119,10 +119,9 @@ Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **A
 | 설정 | 값 | 이유 |
 |------|-----|------|
 | `AckMode` | `RECORD` | 메시지 하나 처리 완료 후 offset 커밋 → DB INSERT 성공 보장 |
-| `ErrorHandlingDeserializer` | 적용 | poison pill 방어 (역직렬화 실패 시 Consumer 멈춤 방지) |
-| `DefaultErrorHandler` | 1초 간격 3회 retry | DB 일시 장애 대응 |
-| `DeadLetterPublishingRecoverer` | `{topic}-dlt`로 발행 | retry 소진 시 메시지 보존 |
-| `DataIntegrityViolationException` | non-retryable | 중복(unique constraint)은 재시도 불필요 |
+| `enable.auto.commit` | `false` | AckMode.RECORD의 전제 조건. Kafka 기본값은 true이므로 명시 필수 |
+
+초기에 ErrorHandlingDeserializer, DefaultErrorHandler + DLT, non-retryable 예외 설정도 검토했으나 제거했다. Producer와 Consumer가 같은 앱이라 poison pill이 발생할 수 없고, 테스트 프로젝트에 과한 프로덕션 설정이었다.
 
 #### 5. 인프라: MSK → EC2 Kafka
 
@@ -132,7 +131,7 @@ Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **A
 | MSK Provisioned (최소 2 브로커) | ~$69 |
 | **EC2 t3.small 1대** | **~$16** |
 
-테스트 프로젝트에 MSK는 과함. EC2에 Kafka 3.8.0 직접 설치 (KRaft 모드, ZooKeeper 불필요).
+테스트 프로젝트에 MSK는 과함. EC2 m6i.large에 Docker로 `apache/kafka:3.8.0` 실행 (KRaft 모드, ZooKeeper 불필요). 초기에는 직접 설치를 시도했으나 Apache 미러 다운로드 실패로 Docker 방식으로 전환.
 
 **결과**: 구현 완료, 통합 테스트 16개 전체 통과.
 
@@ -151,8 +150,7 @@ Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **A
 ```
 1. Kafka consume (IssuanceMessage)
 2. Coupon 로드 → Issuance 생성 + save      ← DB INSERT
-3. unique constraint 위반 → non-retryable → DLT
-4. 기타 실패 → 3회 retry → DLT
+3. unique constraint 위반 → Spring 기본 에러 핸들러가 처리
 ```
 
 **측정 항목** (부하 테스트 시):
@@ -164,6 +162,61 @@ Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **A
 
 **대안 검토 예정**: Kafka 테스트 후 Redis Streams + Lua 원자화 (INCR+XADD 단일 스크립트)
 
+### 2026-03-25: 부하 테스트 — Kafka vs Redis Counter
+
+**문제/질문**: DB 저장을 비동기로 분리하면 처리량이 실제로 올라가는가?
+
+**테스트 조건**:
+- 인프라: App EC2 m6i.large, Kafka EC2 m6i.large (Docker), RDS db.m6g.large, ElastiCache
+- 쿠폰 10,000장, 30초간 부하
+- Redis Counter도 Redis SET 중복 체크로 변경하여 공정 비교 (DB existsBy 제거)
+
+**결과**:
+
+#### 발급 Latency (p95)
+
+| RPS | Redis Counter | Kafka | 개선율 |
+|-----|--------------|-------|--------|
+| 1,000 | 3,655ms | 2,955ms | -19% |
+| 2,000 | 4,637ms | 3,950ms | -15% |
+| 3,000 | 4,306ms | 3,029ms | -30% |
+
+#### 처리량 (iterations)
+
+| RPS | Redis Counter | Kafka | 개선율 |
+|-----|--------------|-------|--------|
+| 1,000 | 24,470 | 24,797 | +1% |
+| 2,000 | 29,577 | 34,372 | +16% |
+| 3,000 | 29,532 | 40,796 | +38% |
+
+#### 정합성
+
+- 전 구간 정합성 100%: 초과발급 0, 중복 0
+- Kafka 메시지 유실 0건: 10,000건 전부 DB 반영 확인
+
+#### Grafana 관측
+
+| 항목 | Redis Counter | Kafka |
+|------|--------------|-------|
+| CPU | 100% | 100% |
+| HikariCP Active | 10 포화 | 10 미만 |
+| HikariCP Pending | **200** | **80** |
+| Tomcat Threads | 200 포화 | 200 포화 |
+
+#### Consumer Lag
+
+Kafka Consumer 처리 속도: 약 초당 120건. 10,000건 완료까지 약 80~90초 소요. 테스트 종료(30초) 후 추가 57초 대기 필요.
+
+**분석**:
+
+1. **DB 분리 효과는 있다**: HikariCP Pending 200→80, Latency 15~30% 개선, 3,000 RPS에서 처리량 +38%.
+2. **하지만 병목이 이동했을 뿐이다**: 둘 다 CPU 100%. Redis Counter는 DB INSERT가 병목이었지만, Kafka는 Redis Lua + Kafka produce 자체가 CPU를 소진. 단일 앱 인스턴스의 CPU가 천장.
+3. **Redis Counter는 2,000→3,000 RPS에서 처리량이 정체** (29,577→29,532). DB INSERT가 발목을 잡아 RPS를 올려도 throughput이 안 늘어남.
+4. **Kafka는 3,000 RPS에서도 처리량이 증가** (34,372→40,796). DB가 API 경로에 없으니 더 많은 요청을 소화할 수 있음.
+5. **Consumer lag은 트레이드오프**: API는 빠르지만 DB 반영에 80~90초 지연. "발급 성공인데 기록 조회 안 됨" 시나리오 발생 가능.
+
+**결론**: Kafka로 DB를 분리하면 처리량과 latency 모두 개선되지만, 단일 인스턴스 CPU 한계를 넘을 수는 없다. 다음 단계는 앱 수평 확장이며, 이는 이 프로젝트 범위를 넘어간다.
+
 ## 현재 결론
 
-Kafka 구현 완료, 통합 테스트 통과. AWS 배포 + 부하 테스트 대기 중.
+Kafka 비동기 저장은 Redis Counter 대비 latency 15~30% 개선, 처리량 최대 38% 향상. DB를 API 경로에서 분리한 효과가 확인됐다. 그러나 단일 앱 인스턴스의 CPU 100% 병목은 해소하지 못했다. 병목이 DB INSERT → Redis + Kafka produce로 이동했을 뿐이며, 근본적 해결은 앱 수평 확장이 필요하다.

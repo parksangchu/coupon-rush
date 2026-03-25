@@ -76,7 +76,7 @@ export function teardown(data) {
 
   // Kafka 비동기 전략: Consumer 처리 대기 (동기 전략은 즉시 통과)
   let verify;
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 60; i++) {
     const verifyRes = http.get(`${BASE_URL}/api/v1/coupons/${data.couponId}/verify`);
     verify = verifyRes.json();
     if (verify.consistent) break;

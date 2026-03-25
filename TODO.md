@@ -51,8 +51,8 @@
 - [x] RedisCounterStrategy 중복 체크를 Redis SET으로 변경 (공정 비교)
 - [x] Terraform: EC2 Kafka 추가 (MSK 대신 직접 설치, ~$16/월)
 - [x] 통합 테스트 (16개 전체 통과)
-- [ ] k6 부하 테스트 (AWS)
-- [ ] 결과 기록 + Kafka dual-write gap 분석
+- [x] k6 부하 테스트 (AWS) — 1,000/2,000/3,000 RPS, Kafka vs Redis Counter 비교
+- [x] 결과 기록 — latency 15~30% 개선, 처리량 최대 +38%, CPU 병목은 미해소
 
 ### Redis Streams (대안 검토)
 - [ ] RedisStreamsStrategy 구현 (Lua: INCR + XADD 원자화)
