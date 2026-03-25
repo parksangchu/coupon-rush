@@ -6,18 +6,61 @@
 
 각 전략의 한계를 직접 확인하고 트레이드오프를 설명할 수 있게 되는 것. 이전 단계의 실측 병목이 다음 단계의 동기가 된다.
 
-## 전략 비교
+## 전략 흐름
 
-| Step | 전략 | 1,000 RPS p(95) | 천장 | 병목 |
-|------|------|-----------------|------|------|
-| 1 | Pessimistic Lock | 5,468ms (붕괴) | ~500 RPS | DB lock contention |
-| 1 | Single UPDATE | 54ms | ~1,000 RPS | DB row-level lock |
-| 2 | Redis Lock | 13,053ms (붕괴) | <500 RPS | Redis 과직렬화 |
-| 2 | Redis Counter | 3,655ms | ~1,000 RPS | DB INSERT (HikariCP 포화) |
-| 3 | Kafka | 1,180ms | **~7,000 RPS** | 앱 CPU |
-| 3 | Redis Streams | **432ms** | ~4,000 RPS | Redis 단일 스레드 |
+### Step 1: DB 직렬화
 
-자세한 비교: [docs/strategy-comparison.md](docs/strategy-comparison.md)
+DB만으로 동시성을 제어한다.
+
+| 전략 | 방식 | 1,000 RPS p(95) | 결과 |
+|------|------|-----------------|------|
+| Pessimistic Lock | SELECT FOR UPDATE | 5,468ms | 붕괴. DB lock 대기 |
+| Single UPDATE | 단일 UPDATE 원자 연산 | **54ms** | 1,000 RPS 소화 |
+
+Single UPDATE가 DB 안에서 할 수 있는 최선. 하지만 **DB row-level lock으로 직렬화되는 구조적 한계**가 있어 더 높은 RPS는 불가능.
+
+→ 동시성 제어를 Redis로 이동
+
+### Step 2: DB + Redis
+
+Redis가 동시성 제어, DB가 데이터 저장.
+
+| 전략 | 방식 | 1,000 RPS p(95) | 2,000 RPS | 결과 |
+|------|------|-----------------|-----------|------|
+| Redis Lock | Redisson 분산 락 | 13,053ms | - | 붕괴. lock-data 분리로 DB 락보다 느림 |
+| Redis Counter | Lua (INCR 원자 연산) | **16ms** | 4,637ms (붕괴) | 1,000 RPS 소화, 2,000에서 한계 |
+
+Redis Counter는 **락 없이** INCR 원자 연산으로 동시성 해결. 1,000 RPS에서 VU 10개로 여유롭게 소화. 하지만 2,000 RPS에서 **DB INSERT가 병목** (HikariCP Pending 200, CPU 100%).
+
+→ DB를 API 경로에서 분리
+
+### Step 3: Redis + Queue + DB (비동기)
+
+Redis가 판단, 메시지 큐가 전달, DB 저장은 백그라운드. **API 응답 시점에 DB를 치지 않는다.**
+
+| 전략 | 방식 | 2,000 RPS p(95) | 3,000 RPS p(95) | 안정 한계 |
+|------|------|-----------------|-----------------|---------|
+| Kafka | Lua + Kafka produce | **9.9ms** | **8.7ms** | ~7,000 RPS |
+| Redis Streams | Lua (INCR + XADD 원자) | **1.7ms** | **1.1ms** | ~4,000 RPS |
+
+둘 다 2,000~3,000 RPS를 VU 100개로 완벽하게 소화한다 (Step 2는 VU 2,000 포화).
+
+**Redis Streams**는 3,000 RPS까지 가장 빠르고 (p95 1ms), INCR↔XADD가 Lua로 원자 실행되어 dual-write gap이 없다. 단, Redis 단일 스레드 한계로 5,000 RPS에서 붕괴.
+
+**Kafka**는 latency가 약간 높지만 (p95 ~10ms), 7,000 RPS까지 안정적이다. INCR↔produce가 원자적이지 않아 크래시 시 1~2건 불일치 가능하나 초과발급 방향은 아님.
+
+**비동기 전략의 대가**: Consumer lag (10,000건 DB 반영에 ~80초). API 응답은 빠르지만 DB 조회 시 아직 안 보일 수 있다.
+
+## 병목 변천
+
+```
+Step 1: DB lock contention (직렬화 대기, CPU 유휴)
+  ↓ Redis로 동시성 제어 이동
+Step 2: DB INSERT 병목 (HikariCP 포화, CPU 100%)
+  ↓ DB를 API 경로에서 분리
+Step 3: Redis 단일 스레드 (Streams) 또는 앱 CPU (Kafka)
+  ↓ 다음: 앱 수평 확장
+```
 
 ## 기술 스택
 
@@ -69,3 +112,5 @@ src/main/java/com/couponrush/
 ## 기술 문서
 
 각 단계의 설계 판단, 문제 해결, 실측 결과는 [docs/](docs/README.md)에 기록되어 있다.
+
+자세한 전략 비교: [docs/strategy-comparison.md](docs/strategy-comparison.md)
