@@ -47,7 +47,7 @@ Step 3의 질문: **"DB 저장을 비동기로 분리하면 처리량이 더 올
 
 | 기준 | Kafka | Redis Streams |
 |------|-------|---------------|
-| INCR↔발행 원자성 | 불가 (외부 시스템) | Lua 스크립트로 INCR+XADD 원자 실행 가능 |
+| INCR-발행 원자성 | 불가 (외부 시스템) | Lua 스크립트로 INCR+XADD 원자 실행 가능 |
 | 장애 도메인 | Redis와 분리 | Redis에 카운터+큐 집중 (단일 장애점) |
 | 내구성 | 디스크 복제 (ISR) | 메모리 기반, AOF 의존 |
 | 실무 사례 | 여기어때·배민·카카오 등 선착순 쿠폰 표준 | 선착순 쿠폰 프로덕션 사례 미발견 |
@@ -158,7 +158,7 @@ Step 2 RedisCounterStrategy도 동일하게 변경. DB `existsBy` 제거 → **A
 - Kafka Consumer lag (DB 반영 지연)
 - DB 쓰기 부하 (Step 2 대비)
 - produce 실패율
-- INCR↔produce gap 발생 빈도
+- INCR-produce gap 발생 빈도
 
 **대안 검토 예정**: Kafka 테스트 후 Redis Streams + Lua 원자화 (INCR+XADD 단일 스크립트)
 
