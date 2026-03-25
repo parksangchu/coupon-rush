@@ -49,6 +49,8 @@
 | Kafka | 8.7ms | 101 | 110 | |
 | Redis Streams | **1.1ms** | **102** | **95** | |
 
+**1,000 RPS 역전 현상에 대한 참고**: Kafka(1,180ms)와 Redis Streams(432ms)가 2,000 RPS(9.9ms, 1.7ms)보다 오히려 느린 것은 측정 조건 때문이다. 1,000 RPS는 쿠폰 소진에 10초가 걸려 거절 폭주 구간이 길어지고, VU가 누적되어 latency가 상승한다. 2,000/3,000 RPS에서는 쿠폰이 빨리 소진되어 대부분의 요청이 Redis에서 즉시 거절되므로 오히려 안정적이다. 또한 1,000 RPS가 각 전략의 첫 테스트 구간이라 JVM 워밍업 효과도 있다.
+
 ### 고 RPS — 천장 탐색
 
 | 전략 | 5,000 RPS | 7,000 RPS | 10,000 RPS |
@@ -58,7 +60,7 @@
 | Redis Streams p(95) | 1,752ms (붕괴) | - | - |
 | Redis Streams maxVUs | 2,000 (포화) | - | - |
 
-**천장**: Kafka ~7,000 RPS, Redis Streams ~4,000 RPS (단일 앱 인스턴스 + 단일 브로커/Redis 기준).
+**천장**: Kafka ~7,000 RPS, Redis Streams ~4,000 RPS (단일 앱 인스턴스 + 단일 브로커/Redis 기준). 3,000 RPS에서 안정 + 5,000/10,000 RPS에서 붕괴 사이의 추정치이며, 정확한 임계점은 측정하지 않았다.
 
 ## 정합성
 
@@ -101,7 +103,7 @@ Step 3: Redis 단일 스레드 (Streams) 또는 앱 CPU (Kafka)
 
 | 전환 | 이전 단계 병목 | 실측 근거 |
 |------|-------------|---------|
-| Step 1 → Step 2 | DB lock contention. 500 RPS에서 Pessimistic Lock p95 5.4초 | HikariCP Pending 190, CPU 60~80% (I/O 대기 지배적) |
+| Step 1 → Step 2 | DB lock contention. 1,000 RPS에서 Pessimistic Lock p95 5.4초 | HikariCP Pending 190, CPU 60~80% (I/O 대기 지배적) |
 | Step 2 (Lock → Counter) | Redis Lock이 DB Lock보다 느림. 1,000 RPS에서 78% 드롭 | HikariCP Active 1~2개 (과직렬화) |
 | Step 2 → Step 3 | Redis Counter에서 DB INSERT가 병목. 2,000 RPS에서 CPU 100% | HikariCP Pending 200, 처리량 정체 (29,532 → 29,577) |
 
