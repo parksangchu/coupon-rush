@@ -61,5 +61,5 @@
 - [x] Kafka vs Redis Streams 트레이드오프 기록 — Streams는 3K까지 압도적(p95 1ms), Kafka는 7K까지 안정
 
 ## 마무리
-- [ ] docs/strategy-comparison.md 작성
+- [x] docs/strategy-comparison.md 작성
 - [ ] README.md 작성
