@@ -34,7 +34,7 @@ public class RedisLockStrategy implements IssuanceStrategy {
     private static final String LOCK_KEY_PREFIX = "coupon_lock:";
 
     @Override
-    public Issuance issue(Long couponId, Long userId) {
+    public void issue(Long couponId, Long userId) {
         if (issuanceRepository.existsByCouponIdAndUserId(couponId, userId)) {
             throw new DuplicateIssuanceException();
         }
@@ -46,11 +46,11 @@ public class RedisLockStrategy implements IssuanceStrategy {
                 throw new LockAcquisitionException();
             }
 
-            return transactionTemplate.execute(status -> {
+            transactionTemplate.executeWithoutResult(status -> {
                 Coupon coupon = couponRepository.findById(couponId)
                     .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
                 coupon.issue();
-                return issuanceRepository.save(new Issuance(coupon, userId));
+                issuanceRepository.save(new Issuance(coupon, userId));
             });
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

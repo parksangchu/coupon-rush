@@ -42,7 +42,7 @@ public class RedisCounterStrategy implements IssuanceStrategy {
 
     @Override
     @Transactional
-    public Issuance issue(Long couponId, Long userId) {
+    public void issue(Long couponId, Long userId) {
         initTotalQuantity(couponId);
 
         Long result = redisTemplate.execute(
@@ -68,7 +68,7 @@ public class RedisCounterStrategy implements IssuanceStrategy {
         Coupon coupon = couponRepository.findById(couponId)
             .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
 
-        return issuanceRepository.save(new Issuance(coupon, userId));
+        issuanceRepository.save(new Issuance(coupon, userId));
     }
 
     @Override

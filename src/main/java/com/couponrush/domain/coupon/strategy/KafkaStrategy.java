@@ -34,7 +34,7 @@ public class KafkaStrategy implements IssuanceStrategy {
     private String topic;
 
     @Override
-    public Issuance issue(Long couponId, Long userId) {
+    public void issue(Long couponId, Long userId) {
         initTotalQuantity(couponId);
 
         Long result = redisTemplate.execute(
@@ -65,11 +65,6 @@ public class KafkaStrategy implements IssuanceStrategy {
             redisTemplate.opsForSet().remove(USERS_KEY_PREFIX + couponId, String.valueOf(userId));
             throw new RuntimeException("Kafka 발행 실패, 보상 완료", e);
         }
-
-        Coupon coupon = couponRepository.findById(couponId)
-            .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
-
-        return new Issuance(coupon, userId);
     }
 
     @Override

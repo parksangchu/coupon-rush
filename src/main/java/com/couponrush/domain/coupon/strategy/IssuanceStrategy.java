@@ -1,8 +1,6 @@
 package com.couponrush.domain.coupon.strategy;
 
-import com.couponrush.domain.coupon.entity.Issuance;
-
 public interface IssuanceStrategy {
-    Issuance issue(Long couponId, Long userId);
+    void issue(Long couponId, Long userId);
     int getIssuedCount(Long couponId);
 }

@@ -41,8 +41,8 @@ public class CouponController {
     }
 
     @PostMapping("/{couponId}/issue")
-    public IssueResponse issue(@PathVariable Long couponId, @RequestBody IssueRequest request) {
-        return couponService.issue(couponId, request.userId());
+    public void issue(@PathVariable Long couponId, @RequestBody IssueRequest request) {
+        couponService.issue(couponId, request.userId());
     }
 
     @GetMapping("/{couponId}/status")

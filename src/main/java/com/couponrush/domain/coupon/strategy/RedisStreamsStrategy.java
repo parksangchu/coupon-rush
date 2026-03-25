@@ -49,7 +49,7 @@ public class RedisStreamsStrategy implements IssuanceStrategy {
     private final CouponRepository couponRepository;
 
     @Override
-    public Issuance issue(Long couponId, Long userId) {
+    public void issue(Long couponId, Long userId) {
         initTotalQuantity(couponId);
 
         Long result = redisTemplate.execute(
@@ -74,10 +74,6 @@ public class RedisStreamsStrategy implements IssuanceStrategy {
             throw new CouponExhaustedException();
         }
 
-        Coupon coupon = couponRepository.findById(couponId)
-            .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
-
-        return new Issuance(coupon, userId);
     }
 
     @Override

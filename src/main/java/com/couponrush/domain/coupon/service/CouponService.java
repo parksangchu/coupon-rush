@@ -33,12 +33,11 @@ public class CouponService {
         return couponRepository.findAll();
     }
 
-    public IssueResponse issue(Long couponId, Long userId) {
+    public void issue(Long couponId, Long userId) {
         if (userId == null) {
             throw new IllegalArgumentException("userId는 필수입니다");
         }
-        Issuance issuance = issuanceStrategy.issue(couponId, userId);
-        return IssueResponse.from(issuance);
+        issuanceStrategy.issue(couponId, userId);
     }
 
     @Transactional(readOnly = true)

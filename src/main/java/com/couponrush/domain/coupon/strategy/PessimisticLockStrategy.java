@@ -20,7 +20,7 @@ public class PessimisticLockStrategy implements IssuanceStrategy {
 
     @Override
     @Transactional
-    public Issuance issue(Long couponId, Long userId) {
+    public void issue(Long couponId, Long userId) {
         Coupon coupon = couponRepository.findByIdWithPessimisticLock(couponId)
             .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
 
@@ -30,7 +30,7 @@ public class PessimisticLockStrategy implements IssuanceStrategy {
 
         coupon.issue();
 
-        return issuanceRepository.save(new Issuance(coupon, userId));
+        issuanceRepository.save(new Issuance(coupon, userId));
     }
 
     @Override
