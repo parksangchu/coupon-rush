@@ -97,7 +97,7 @@ Step 3: Redis 단일 스레드 (Streams) 또는 앱 CPU (Kafka)
 
 - **예상 트래픽 ≤3,000 RPS + 원자성 중시**: Redis Streams. 인프라 추가 없이 가장 빠르고, dual-write gap이 없음.
 - **예상 트래픽 >3,000 RPS 또는 내구성 중시**: Kafka. Redis 단일 스레드 한계를 넘어서는 처리량이 필요하거나, 디스크 복제 기반 내구성이 필요한 경우.
-- **둘 다 필요**: Redis Streams로 시작, 트래픽 증가 시 Kafka로 전환. 전략 패턴 구조라 코드 변경 없이 전환 가능 (Kafka 브로커 인프라 추가는 별도 필요).
+- **둘 다 필요**: Redis Streams로 시작, 트래픽 증가 시 Kafka로 전환.
 
 ## 각 단계의 전환 동기
 
