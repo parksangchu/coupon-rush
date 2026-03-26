@@ -22,10 +22,10 @@
 
 DB만으로 동시성을 제어한다.
 
-| 전략 | 방식 | 결과 |
-|------|------|------|
-| Pessimistic Lock | SELECT FOR UPDATE | 1,000 RPS에서 38% 드롭 |
-| Single UPDATE | 단일 UPDATE 원자 연산 | 500 RPS p95 2,085ms, 500 RPS부터 드롭 발생 |
+| 전략 | 방식 | 500 RPS p(95) | 1,000 RPS p(95) | 비고 |
+|------|------|---------------|-----------------|------|
+| Pessimistic Lock | SELECT FOR UPDATE | 6,743ms | 14,682ms | 500 RPS에서 19% 드롭 |
+| Single UPDATE | 단일 UPDATE 원자 연산 | 2,085ms | 8,709ms | 500 RPS부터 드롭 발생 |
 
 Pessimistic Lock은 lock 안에서 중복 체크 + INSERT까지 수행하여 lock 보유 시간이 길고, 거절도 lock을 잡아야 한다. Single UPDATE는 DB 안에서 할 수 있는 최선이지만, **DB row-level lock 직렬화** 때문에 500 RPS에서 이미 한계.
 
@@ -37,7 +37,7 @@ Redis가 동시성 제어, DB가 데이터 저장.
 
 | 전략 | 방식 | 1,000 RPS p(95) | 2,000 RPS p(95) | 비고 |
 |------|------|-----------------|-----------------|------|
-| Redis Lock | Redisson 분산 락 | 붕괴 | - | 500 RPS에서 58% 드롭, 쿠폰 미소진 |
+| Redis Lock | Redisson 분산 락 | 42,345ms | - | 500 RPS에서도 p95 34,614ms, 쿠폰 미소진 |
 | Redis Counter | Lua (INCR 원자 연산) | **9.2ms** | 1,074ms | 1,000 RPS 드롭 0, 전량 처리 |
 
 Redis Counter는 **락 없이** INCR 원자 연산으로 동시성 해결. 거절(전체 요청의 90% 이상)이 Redis에서만 처리되어 DB 부하가 크게 줄어든다. 하지만 발급 성공 시 **DB INSERT가 동기로 실행**되어 2,000 RPS에서 악화 시작.
