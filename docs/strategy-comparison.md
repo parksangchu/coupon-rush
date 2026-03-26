@@ -38,6 +38,8 @@
 | 10,000 | - | - | 110ms | 109ms |
 | 20,000 | - | - | 88ms | 57ms |
 
+5,000 RPS에서 Redis Counter(2,215ms)가 Single UPDATE(1,691ms)보다 느리다. Single UPDATE는 모든 요청이 DB를 치지만 row lock 직렬화로 2,000 RPS 부근에서 이미 포화되어 이후 latency가 정체된다. 반면 Redis Counter는 거절을 Redis에서 빠르게 처리하는 대신, 성공한 10,000건의 DB INSERT가 짧은 시간에 집중되어 latency가 계속 상승한다. 두 전략 모두 DB가 병목이지만 포화 패턴이 다르다. 이것이 Step 3에서 DB를 API 경로에서 완전히 분리한 이유다.
+
 ### maxVUs
 
 | RPS | Single UPDATE | Redis Counter | Kafka | Redis Streams |
@@ -48,6 +50,10 @@
 | 5,000 | 2,000 (포화) | 2,000 (포화) | 618 | 428 |
 | 7,000 | - | - | 1,677 | 1,039 |
 | 10,000 | - | - | 5,000 (포화) | 3,877 |
+
+10,000 RPS에서 Redis Streams의 VU(3,877)가 Kafka(5,000 포화)보다 낮은 이유: p95는 비슷하지만 Kafka는 Redis Lua + Kafka produce 2단계 네트워크 왕복으로 tail latency(p99, max)가 더 높아 평균 응답시간이 길다. Little's Law(L = λ × W) 역산 시 Kafka 평균 약 714ms, Redis Streams 약 554ms. VU 소비량은 p95가 아닌 평균에 의해 결정된다.
+
+VU에 여유가 있다고 서버에 여유가 있는 것은 아니다. maxVUs는 k6 클라이언트 측 동시 요청 수이고, 처리량 천장은 서버 측 한계다.
 
 ### 처리량 천장
 
