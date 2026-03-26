@@ -77,17 +77,6 @@ Kafka와 Redis Streams의 처리량 천장은 거의 동일하다.
 - 중복 발급 0건
 - 비동기 전략 메시지 유실 0건 (10,000건 전부 DB 반영 확인)
 
-## 병목 변천
-
-```
-Step 1: DB lock contention (직렬화 대기, CPU 유휴)
-  ↓ Redis로 동시성 제어 이동
-Step 2: DB INSERT 병목 (HikariCP 포화, CPU 100%)
-  ↓ DB를 API 경로에서 분리
-Step 3: 앱 서버 CPU (2 vCPU) — 약 7,000 req/s에서 천장
-  ↓ 다음: 앱 수평 확장
-```
-
 ## Kafka vs Redis Streams 트레이드오프
 
 처리량 천장은 거의 동일 (약 7,000 req/s). p95, p99 모두 고 RPS에서 수렴. **성능으로는 구분할 수 없다.** 차이는 구조적 특성에 있다.
@@ -104,14 +93,6 @@ Step 3: 앱 서버 CPU (2 vCPU) — 약 7,000 req/s에서 천장
 
 - **원자성 중시 + 인프라 단순화**: Redis Streams. dual-write gap이 없고 별도 인프라 불필요.
 - **내구성 중시 + 장애 도메인 분리**: Kafka. 디스크 복제 기반, Redis 장애 시에도 큐 데이터 보존.
-
-## 각 단계의 전환 동기
-
-| 전환 | 이전 단계 병목 | 실측 근거 |
-|------|-------------|---------|
-| Step 1 → Step 2 | DB lock contention. 500 RPS에서 Single UPDATE 붕괴 | HikariCP Pending, CPU 유휴 (I/O 대기 지배적) |
-| Step 2 (Lock → Counter) | Redis Lock이 DB Lock보다 느림. 1,000 RPS에서 65% 드롭 | lock-data 분리: HikariCP Active 1~2개 (과직렬화) |
-| Step 2 → Step 3 | Redis Counter에서 DB INSERT가 병목. 2,000 RPS에서 악화 시작 | HikariCP Pending 증가, 처리량 정체 |
 
 ## 테스트 인프라
 

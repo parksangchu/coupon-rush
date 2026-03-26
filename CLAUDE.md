@@ -44,7 +44,7 @@ k6 run k6/scenarios/spike.js
 
 `IssuanceStrategy` 인터페이스를 6개 구현체가 구현한다.
 `coupon.strategy` 프로퍼티로 런타임 전환. 코드 변경 없이 동일 조건에서 전략 비교 가능.
-전략 비교는 `docs/strategy-comparison.md`, 기술 문서는 `docs/` 참고.
+전략 비교는 `docs/coupon/strategy-comparison.md`, 기술 문서는 `docs/` 참고.
 
 ### 패키지 구조
 

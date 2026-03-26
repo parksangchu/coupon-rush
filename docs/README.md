@@ -13,4 +13,4 @@
 | [Step 2: DB + Redis 부하 테스트](coupon/redis-lock-load-test.md) | resolved | 2026-03-24 |
 | [Step 3: 비동기 저장 부하 테스트](coupon/kafka-async-load-test.md) | resolved | 2026-03-26 |
 | [4차 부하 테스트 기록 (maxVUs 10,000 + p99)](coupon/4th-load-test-log.md) | resolved | 2026-03-26 |
-| [전략 비교](strategy-comparison.md) | resolved | 2026-03-26 |
+| [전략 비교](coupon/strategy-comparison.md) | resolved | 2026-03-26 |
