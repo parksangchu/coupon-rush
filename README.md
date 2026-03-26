@@ -24,7 +24,7 @@ DB만으로 동시성을 제어한다.
 
 | 전략 | 방식 | 500 RPS p(95) | 1,000 RPS p(95) |
 |------|------|---------------|-----------------|
-| Pessimistic Lock | SELECT FOR UPDATE | 붕괴 | - |
+| Pessimistic Lock | SELECT FOR UPDATE | 11,072ms (붕괴) | 5,468ms |
 | Single UPDATE | 단일 UPDATE 원자 연산 | **2,085ms (붕괴)** | 8,709ms |
 
 Single UPDATE가 DB 안에서 할 수 있는 최선. 하지만 **DB row-level lock 직렬화** 때문에 500 RPS에서 급격히 붕괴한다.
