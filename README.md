@@ -37,8 +37,8 @@ Redis가 동시성 제어, DB가 데이터 저장.
 
 | 전략 | 방식 | 1,000 RPS p(95) | 2,000 RPS p(95) | 비고 |
 |------|------|-----------------|-----------------|------|
-| Redis Lock | Redisson 분산 락 | 42,345ms | - | 500 RPS에서도 p95 34,614ms, 쿠폰 미소진 |
-| Redis Counter | Lua (INCR 원자 연산) | **9.2ms** | 1,074ms | 1,000 RPS 드롭 0, 전량 처리 |
+| Redis Lock | Redisson 분산 락 | 42,345ms | 46,513ms | 쿠폰 미소진 |
+| Redis Counter | Lua (INCR 원자 연산) | **9.2ms** | 1,074ms | 1,000 RPS 드롭 0 |
 
 Redis Counter는 **락 없이** INCR 원자 연산으로 동시성 해결. 거절(전체 요청의 90% 이상)이 Redis에서만 처리되어 DB 부하가 크게 줄어든다. 하지만 발급 성공 시 **DB INSERT가 동기로 실행**되어 2,000 RPS에서 악화 시작.
 
