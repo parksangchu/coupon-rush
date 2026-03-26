@@ -333,12 +333,33 @@ Kafka, Redis Streams 모두 Consumer 처리 속도 약 초당 120건. 10,000건 
 
 Kafka는 2차에서 이미 여러 번 테스트를 돌려 자연 웜업이 됐을 가능성이 높다. Redis Streams는 2차에서 처음 측정하여 콜드 스타트 영향을 그대로 받았다.
 
+### 2026-03-26: 부하 테스트 4차 — maxVUs 10,000 + p99 수집
+
+**문제/질문**: 3차에서 두 가지 문제 발견: (1) Single UPDATE, Redis Counter는 maxVUs 2,000에서 측정하여 실제 VU 미확인, (2) p99 미수집으로 Kafka/Redis Streams VU 차이의 근거 부족.
+
+**테스트 조건**:
+- 인프라: 3차와 동일
+- k6 maxVUs: 10,000 (3차의 5,000에서 상향)
+- summaryTrendStats로 p(99) 수집 (threshold 트릭 대신 정식 방법)
+- handleSummary()로 JSON 저장
+- JVM 웜업: 1,000 RPS × 2회, 쿠폰 10,000개, 30초
+
+**결과**: 상세 기록은 [4차 부하 테스트 기록](4th-load-test-log.md) 참고.
+
+**핵심 발견**:
+
+1. **Single UPDATE 3차 결과(110ms)는 오류**: 4차에서 1,000 RPS p95 8,709ms. 재배포 후 재측정에서도 동일 결과 재현. 400 RPS에서 이미 p95 201ms이므로 1,000 RPS에서 110ms는 불가능. 3차에서 다른 전략 결과가 섞인 기록 오류로 판단.
+
+2. **Kafka/Redis Streams VU 차이는 노이즈**: 3차에서 Kafka(5,000) > Streams(3,877)였으나, 4차에서 Kafka(3,806) < Streams(4,843)로 역전. p99도 10,000 RPS에서 33ms vs 34ms로 거의 동일.
+
+3. **나머지 전략은 3차와 일치**: Redis Counter 5,000 RPS p95 2,017ms (3차: 2,215ms). Kafka/Redis Streams도 유사.
+
 ## 현재 결론
 
-DB를 API 경로에서 완전히 분리하면 비동기 전략 모두 극적인 성능 향상을 보인다 (Redis Counter 2,000 RPS p95 432ms → Kafka 9.7ms, Redis Streams 2.6ms).
+DB를 API 경로에서 완전히 분리하면 비동기 전략 모두 극적인 성능 향상을 보인다 (Redis Counter 2,000 RPS p95 1,074ms → Kafka 8.1ms, Redis Streams 2.3ms).
 
-**두 비동기 전략의 처리량 천장은 약 7,000 req/s로 동일하다.** 차이는 성능이 아닌 구조적 특성에 있다:
+**두 비동기 전략의 처리량 천장은 약 7,000 req/s로 동일하다.** p95, p99 모두 고 RPS에서 수렴하며, VU 차이도 컨디션에 따라 역전된다. **성능으로는 구분할 수 없다.** 차이는 구조적 특성에 있다:
 - **Redis Streams**: INCR+XADD가 Lua로 원자 실행 (dual-write gap 없음). 별도 인프라 불필요.
 - **Kafka**: 디스크 복제 기반 내구성. Redis와 장애 도메인 분리. 단 INCR-produce가 원자적이지 않아 크래시 시 1-2건 불일치 가능 (초과발급 방향은 아님).
 
-**JVM 웜업의 교훈**: 동일 테스트에서 p95가 10배 이상 차이. 부하 테스트 시 웜업 run을 반드시 수행해야 안정적 결과를 얻을 수 있다. 2차 테스트에서 "Redis Streams가 5,000 RPS에서 붕괴한다"는 결론은 웜업 미적용에 의한 오류였다.
+**측정 교훈**: (1) JVM 웜업 필수 — p95가 10배 이상 차이. (2) 결과는 매 테스트 직후 기록 — 몰아서 기록하면 오류 발생 (Single UPDATE 110ms 사례). (3) maxVUs를 충분히 높여야 실제 VU를 확인 가능.

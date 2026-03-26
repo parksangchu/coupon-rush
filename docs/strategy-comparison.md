@@ -22,38 +22,47 @@
 | 3 | Kafka | Redis (INCR) + Kafka | 비동기 | Lua → Kafka produce → Consumer DB INSERT |
 | 3 | Redis Streams | Redis (INCR + XADD) | 비동기 | Lua 원자 실행 → Consumer DB INSERT |
 
-## 성능 비교 (웜업 보정 후)
+## 성능 비교
 
-조건: 쿠폰 10,000개, 30초, HikariCP pool size 10, JVM 웜업 2회 후 측정.
+조건: 쿠폰 10,000개, 30초, HikariCP pool size 10, k6 maxVUs 10,000, JVM 웜업 2회 후 측정.
 
 ### 발급 Latency p(95)
 
 | RPS | Single UPDATE | Redis Counter | Kafka | Redis Streams |
 |-----|--------------|---------------|-------|---------------|
-| 1,000 | 110ms | **25ms** | **7.8ms** | **1.9ms** |
-| 2,000 | 1,464ms | 432ms | **9.7ms** | **2.6ms** |
-| 3,000 | 1,687ms | 860ms | **10ms** | **8.1ms** |
-| 5,000 | 1,691ms | 2,215ms | **18ms** | **9.4ms** |
-| 7,000 | - | - | 31ms | 12ms |
-| 10,000 | - | - | 110ms | 109ms |
-| 20,000 | - | - | 88ms | 57ms |
+| 500 | 2,085ms | **8.9ms** | - | - |
+| 1,000 | 8,709ms | **9.2ms** | **7.4ms** | **1.7ms** |
+| 2,000 | 12,479ms | 1,074ms | **8.1ms** | **2.3ms** |
+| 5,000 | - | 2,017ms | **15ms** | **12ms** |
+| 7,000 | - | - | 20ms | 12ms |
+| 10,000 | - | - | 22ms | 17ms |
 
-5,000 RPS에서 Redis Counter(2,215ms)가 Single UPDATE(1,691ms)보다 느리다. Single UPDATE는 모든 요청이 DB를 치지만 row lock 직렬화로 2,000 RPS 부근에서 이미 포화되어 이후 latency가 정체된다. 반면 Redis Counter는 거절을 Redis에서 빠르게 처리하는 대신, 성공한 10,000건의 DB INSERT가 짧은 시간에 집중되어 latency가 계속 상승한다. 두 전략 모두 DB가 병목이지만 포화 패턴이 다르다. 이것이 Step 3에서 DB를 API 경로에서 완전히 분리한 이유다.
+Single UPDATE는 400 RPS까지 안정(p95 201ms)이지만 500 RPS에서 급격히 붕괴한다. Redis Counter는 1,000 RPS까지 안정(p95 9ms), 2,000에서 악화 시작. 비동기 전략(Kafka, Redis Streams)은 10,000 RPS에서도 p95 20ms 이하.
+
+### 발급 Latency p(99)
+
+| RPS | Single UPDATE | Redis Counter | Kafka | Redis Streams |
+|-----|--------------|---------------|-------|---------------|
+| 500 | 2,213ms | 23ms | - | - |
+| 1,000 | 9,082ms | 23ms | 9.3ms | 4.4ms |
+| 2,000 | 12,963ms | 1,332ms | 23ms | 9.7ms |
+| 5,000 | - | 2,253ms | 22ms | 27ms |
+| 10,000 | - | - | 33ms | 34ms |
+
+고 RPS에서 Kafka와 Redis Streams의 p99가 수렴한다 (10,000 RPS: 33ms vs 34ms).
 
 ### maxVUs
 
 | RPS | Single UPDATE | Redis Counter | Kafka | Redis Streams |
 |-----|--------------|---------------|-------|---------------|
-| 1,000 | 124 | 100 | 100 | 100 |
-| 2,000 | 2,000 (포화) | 500 | 101 | 100 |
-| 3,000 | 2,000 (포화) | 1,833 | 123 | 126 |
-| 5,000 | 2,000 (포화) | 2,000 (포화) | 618 | 428 |
-| 7,000 | - | - | 1,677 | 1,039 |
-| 10,000 | - | - | 5,000 (포화) | 3,877 |
+| 500 | 1,019 | 100 | - | - |
+| 1,000 | 6,126 | 100 | 100 | 100 |
+| 2,000 | 10,000 (포화) | 1,601 | 101 | 100 |
+| 5,000 | - | 10,000 (포화) | 344 | 344 |
+| 7,000 | - | - | 788 | 651 |
+| 10,000 | - | - | 3,806 | 4,843 |
 
-10,000 RPS에서 Redis Streams의 VU(3,877)가 Kafka(5,000 포화)보다 낮은 이유: p95는 비슷하지만 Kafka는 Redis Lua + Kafka produce 2단계 네트워크 왕복으로 tail latency(p99, max)가 더 높아 평균 응답시간이 길다. Little's Law(L = λ × W) 역산 시 Kafka 평균 약 714ms, Redis Streams 약 554ms. VU 소비량은 p95가 아닌 평균에 의해 결정된다.
-
-VU에 여유가 있다고 서버에 여유가 있는 것은 아니다. maxVUs는 k6 클라이언트 측 동시 요청 수이고, 처리량 천장은 서버 측 한계다.
+Kafka와 Redis Streams의 VU 차이는 컨디션(JVM 상태, 인프라 타이밍)에 따라 달라지며, 체계적인 차이가 아니다. 이전 측정(3차)에서는 Kafka가 더 높았으나, 이번 측정(4차)에서는 Redis Streams가 더 높아 역전됐다.
 
 ### 처리량 천장
 
@@ -81,7 +90,7 @@ Step 3: 앱 서버 CPU (2 vCPU) — 약 7,000 req/s에서 천장
 
 ## Kafka vs Redis Streams 트레이드오프
 
-처리량 천장은 거의 동일 (약 7,000 req/s). 차이는 성능이 아닌 구조적 특성에 있다.
+처리량 천장은 거의 동일 (약 7,000 req/s). p95, p99 모두 고 RPS에서 수렴. **성능으로는 구분할 수 없다.** 차이는 구조적 특성에 있다.
 
 | 기준 | Kafka | Redis Streams |
 |------|-------|---------------|
@@ -100,9 +109,9 @@ Step 3: 앱 서버 CPU (2 vCPU) — 약 7,000 req/s에서 천장
 
 | 전환 | 이전 단계 병목 | 실측 근거 |
 |------|-------------|---------|
-| Step 1 → Step 2 | DB lock contention. 1,000 RPS에서 Pessimistic Lock p95 5.4초 | HikariCP Pending 190, CPU 60~80% (I/O 대기 지배적) |
+| Step 1 → Step 2 | DB lock contention. 500 RPS에서 Single UPDATE 붕괴 | HikariCP Pending, CPU 유휴 (I/O 대기 지배적) |
 | Step 2 (Lock → Counter) | Redis Lock이 DB Lock보다 느림. 1,000 RPS에서 78% 드롭 | lock-data 분리: HikariCP Active 1~2개 (과직렬화) |
-| Step 2 → Step 3 | Redis Counter에서 DB INSERT가 병목. 2,000 RPS에서 CPU 100% | HikariCP Pending 200, 처리량 정체 |
+| Step 2 → Step 3 | Redis Counter에서 DB INSERT가 병목. 2,000 RPS에서 악화 시작 | HikariCP Pending 증가, 처리량 정체 |
 
 ## 테스트 인프라
 
@@ -112,7 +121,11 @@ Step 3: 앱 서버 CPU (2 vCPU) — 약 7,000 req/s에서 천장
 | DB | RDS db.m6g.large, MySQL 8.4 |
 | Redis | ElastiCache cache.m6g.large |
 | Kafka | EC2 m6i.large, Docker apache/kafka:3.8.0 |
-| Test | EC2 m6i.large, k6 |
+| Test | EC2 m6i.large, k6 (maxVUs 10,000) |
+
+## 측정 이력
+
+3차 테스트(maxVUs 2,000~5,000)에서 Single UPDATE 1,000 RPS p95 110ms로 기록했으나, 4차 테스트(maxVUs 10,000)에서 재현 불가. 동일 조건 재배포 후 재측정에서도 p95 8,617ms로 일관. 3차의 Single UPDATE 결과는 기록 오류로 판단하여 4차 결과로 교체했다. 상세 경위는 [4차 부하 테스트 기록](coupon/4th-load-test-log.md) 참고.
 
 ## JVM 워밍업에 대한 참고
 
