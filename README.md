@@ -11,10 +11,10 @@
 | 분류 | 기술 |
 |------|------|
 | Backend | Java 21, Spring Boot 4.x |
-| DB | MySQL 8.4 (RDS) |
-| Cache / Queue | Redis (ElastiCache), Kafka |
+| DB | MySQL 8.4 |
+| Cache / Queue | Redis, Kafka |
 | Test | k6, Testcontainers, Prometheus + Grafana |
-| Infra | Terraform, AWS (EC2, RDS, ElastiCache) |
+| Infra | Terraform, AWS, Docker |
 
 ## 전략 흐름
 
