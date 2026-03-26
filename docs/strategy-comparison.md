@@ -28,41 +28,41 @@
 
 ### 발급 Latency p(95)
 
-| RPS | Single UPDATE | Redis Counter | Kafka | Redis Streams |
-|-----|--------------|---------------|-------|---------------|
-| 500 | 2,085ms | **8.9ms** | - | - |
-| 1,000 | 8,709ms | **9.2ms** | **7.4ms** | **1.7ms** |
-| 2,000 | 12,479ms | 1,074ms | **8.1ms** | **2.3ms** |
-| 5,000 | - | 2,017ms | **15ms** | **12ms** |
-| 7,000 | - | - | 20ms | 12ms |
-| 10,000 | - | - | 22ms | 17ms |
+| RPS | Pessimistic Lock | Single UPDATE | Redis Lock | Redis Counter | Kafka | Redis Streams |
+|-----|-----------------|--------------|------------|---------------|-------|---------------|
+| 500 | 6,743ms | 2,085ms | 34,614ms | **8.9ms** | - | - |
+| 1,000 | 14,682ms | 8,709ms | 42,345ms | **9.2ms** | **7.4ms** | **1.7ms** |
+| 2,000 | 21,525ms | 12,479ms | 46,513ms | 1,074ms | **8.1ms** | **2.3ms** |
+| 5,000 | - | - | - | 2,017ms | **15ms** | **12ms** |
+| 7,000 | - | - | - | - | 20ms | 12ms |
+| 10,000 | - | - | - | - | 22ms | 17ms |
 
-Single UPDATE는 400 RPS까지 안정(p95 201ms)이지만 500 RPS에서 급격히 붕괴한다. Redis Counter는 1,000 RPS까지 안정(p95 9ms), 2,000에서 악화 시작. 비동기 전략(Kafka, Redis Streams)은 10,000 RPS에서도 p95 20ms 이하.
+Pessimistic Lock은 500 RPS에서 이미 p95 6.7초. Redis Lock은 분산 락 직렬화로 전 구간 최하위 (500 RPS에서 34초, 쿠폰 미소진). Single UPDATE는 500 RPS에서 붕괴. Redis Counter는 1,000 RPS까지 안정(p95 9ms), 2,000에서 악화 시작. 비동기 전략(Kafka, Redis Streams)은 10,000 RPS에서도 p95 25ms 이하.
 
 ### 발급 Latency p(99)
 
-| RPS | Single UPDATE | Redis Counter | Kafka | Redis Streams |
-|-----|--------------|---------------|-------|---------------|
-| 500 | 2,213ms | 23ms | - | - |
-| 1,000 | 9,082ms | 23ms | 9.3ms | 4.4ms |
-| 2,000 | 12,963ms | 1,332ms | 23ms | 9.7ms |
-| 5,000 | - | 2,253ms | 22ms | 27ms |
-| 10,000 | - | - | 33ms | 34ms |
+| RPS | Pessimistic Lock | Single UPDATE | Redis Lock | Redis Counter | Kafka | Redis Streams |
+|-----|-----------------|--------------|------------|---------------|-------|---------------|
+| 500 | 7,046ms | 2,213ms | 36,071ms | 23ms | - | - |
+| 1,000 | 15,284ms | 9,082ms | 44,216ms | 23ms | 9.3ms | 4.4ms |
+| 2,000 | 22,382ms | 12,963ms | 48,488ms | 1,332ms | 23ms | 9.7ms |
+| 5,000 | - | - | - | 2,253ms | 22ms | 27ms |
+| 10,000 | - | - | - | - | 33ms | 34ms |
 
-고 RPS에서 Kafka와 Redis Streams의 p99가 수렴한다 (10,000 RPS: 33ms vs 34ms).
+락 전략(Pessimistic Lock, Redis Lock)은 p95와 p99 차이가 작다 — 전체가 느리기 때문. 고 RPS에서 Kafka와 Redis Streams의 p99가 수렴한다 (10,000 RPS: 33ms vs 34ms).
 
 ### maxVUs
 
-| RPS | Single UPDATE | Redis Counter | Kafka | Redis Streams |
-|-----|--------------|---------------|-------|---------------|
-| 500 | 1,019 | 100 | - | - |
-| 1,000 | 6,126 | 100 | 100 | 100 |
-| 2,000 | 10,000 (포화) | 1,601 | 101 | 100 |
-| 5,000 | - | 10,000 (포화) | 344 | 344 |
-| 7,000 | - | - | 788 | 651 |
-| 10,000 | - | - | 3,806 | 4,843 |
+| RPS | Pessimistic Lock | Single UPDATE | Redis Lock | Redis Counter | Kafka | Redis Streams |
+|-----|-----------------|--------------|------------|---------------|-------|---------------|
+| 500 | 2,756 | 1,019 | 5,513 | 100 | - | - |
+| 1,000 | 8,912 | 6,126 | 10,000 (포화) | 100 | 100 | 100 |
+| 2,000 | 10,000 (포화) | 10,000 (포화) | 10,000 (포화) | 1,601 | 101 | 100 |
+| 5,000 | - | - | - | 10,000 (포화) | 344 | 344 |
+| 7,000 | - | - | - | - | 788 | 651 |
+| 10,000 | - | - | - | - | 3,806 | 4,843 |
 
-Kafka와 Redis Streams의 VU 차이는 컨디션(JVM 상태, 인프라 타이밍)에 따라 달라지며, 체계적인 차이가 아니다. 이전 측정(3차)에서는 Kafka가 더 높았으나, 이번 측정(4차)에서는 Redis Streams가 더 높아 역전됐다.
+Redis Lock은 1,000 RPS에서 이미 VU 포화. Pessimistic Lock도 2,000 RPS에서 포화. 락 전략은 응답이 느려 VU가 빠르게 소진된다. Kafka와 Redis Streams의 VU 차이는 컨디션(JVM 상태, 인프라 타이밍)에 따라 달라지며, 체계적인 차이가 아니다. 이전 측정(3차)에서는 Kafka가 더 높았으나, 이번 측정(4차)에서는 Redis Streams가 더 높아 역전됐다.
 
 ### 처리량 천장
 
@@ -110,7 +110,7 @@ Step 3: 앱 서버 CPU (2 vCPU) — 약 7,000 req/s에서 천장
 | 전환 | 이전 단계 병목 | 실측 근거 |
 |------|-------------|---------|
 | Step 1 → Step 2 | DB lock contention. 500 RPS에서 Single UPDATE 붕괴 | HikariCP Pending, CPU 유휴 (I/O 대기 지배적) |
-| Step 2 (Lock → Counter) | Redis Lock이 DB Lock보다 느림. 1,000 RPS에서 78% 드롭 | lock-data 분리: HikariCP Active 1~2개 (과직렬화) |
+| Step 2 (Lock → Counter) | Redis Lock이 DB Lock보다 느림. 1,000 RPS에서 65% 드롭 | lock-data 분리: HikariCP Active 1~2개 (과직렬화) |
 | Step 2 → Step 3 | Redis Counter에서 DB INSERT가 병목. 2,000 RPS에서 악화 시작 | HikariCP Pending 증가, 처리량 정체 |
 
 ## 테스트 인프라
