@@ -9,6 +9,7 @@ task.md
 TODO.md
 terraform/.terraform/
 terraform/terraform.tfstate*
+terraform/tfplan
 terraform/terraform.tfvars
 k6/reports/
 *.env

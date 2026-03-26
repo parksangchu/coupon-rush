@@ -48,16 +48,23 @@ public class RedisLockStrategy implements IssuanceStrategy {
         try {
             boolean acquired = lock.tryLock(waitTime, leaseTime, TimeUnit.MILLISECONDS);
             if (!acquired) {
+                redisTemplate.opsForSet().remove(USERS_KEY_PREFIX + couponId, String.valueOf(userId));
                 throw new LockAcquisitionException();
             }
 
-            transactionTemplate.executeWithoutResult(status -> {
-                Coupon coupon = couponRepository.findById(couponId)
-                    .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
-                coupon.issue();
-                issuanceRepository.save(new Issuance(coupon, userId));
-            });
+            try {
+                transactionTemplate.executeWithoutResult(status -> {
+                    Coupon coupon = couponRepository.findById(couponId)
+                        .orElseThrow(() -> new IllegalArgumentException("쿠폰이 존재하지 않습니다: " + couponId));
+                    coupon.issue();
+                    issuanceRepository.save(new Issuance(coupon, userId));
+                });
+            } catch (RuntimeException e) {
+                redisTemplate.opsForSet().remove(USERS_KEY_PREFIX + couponId, String.valueOf(userId));
+                throw e;
+            }
         } catch (InterruptedException e) {
+            redisTemplate.opsForSet().remove(USERS_KEY_PREFIX + couponId, String.valueOf(userId));
             Thread.currentThread().interrupt();
             throw new RuntimeException("락 획득 중 인터럽트 발생", e);
         } finally {
