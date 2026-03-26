@@ -1,6 +1,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend, Counter } from 'k6/metrics';
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.1.0/index.js';
 import { BASE_URL } from '../lib/config.js';
 
 const RATE = parseInt(__ENV.RATE || '500');
@@ -10,6 +11,7 @@ const issuedDuration = new Trend('duration_issued');
 const rejectedDuration = new Trend('duration_rejected');
 const issuedCount = new Counter('count_issued');
 const rejectedCount = new Counter('count_rejected');
+const errorCount = new Counter('count_error');
 
 export const options = {
   scenarios: {
@@ -19,9 +21,10 @@ export const options = {
       timeUnit: '1s',
       duration: '30s',
       preAllocatedVUs: 100,
-      maxVUs: 5000,
+      maxVUs: 10000,
     },
   },
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)', 'count'],
   thresholds: {
     'checks': ['rate==1'],
   },
@@ -62,7 +65,16 @@ export default function (data) {
   } else if (res.status === 409) {
     rejectedDuration.add(res.timings.duration);
     rejectedCount.add(1);
+  } else {
+    errorCount.add(1);
   }
+}
+
+export function handleSummary(data) {
+  return {
+    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    'summary.json': JSON.stringify(data),
+  };
 }
 
 export function teardown(data) {
