@@ -9,7 +9,7 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 @Configuration
-@ConditionalOnExpression("'${coupon.strategy}' == 'redis-counter' or '${coupon.strategy}' == 'kafka' or '${coupon.strategy}' == 'redis-streams'")
+@ConditionalOnExpression("'${coupon.strategy}' == 'redis-lock' or '${coupon.strategy}' == 'redis-counter' or '${coupon.strategy}' == 'kafka' or '${coupon.strategy}' == 'redis-streams'")
 public class RedisConfig {
 
     @Value("${spring.data.redis.host:localhost}")

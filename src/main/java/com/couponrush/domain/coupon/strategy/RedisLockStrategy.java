@@ -12,6 +12,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -21,9 +22,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class RedisLockStrategy implements IssuanceStrategy {
 
     private final RedissonClient redissonClient;
+    private final StringRedisTemplate redisTemplate;
     private final CouponRepository couponRepository;
     private final IssuanceRepository issuanceRepository;
     private final TransactionTemplate transactionTemplate;
+
+    private static final String USERS_KEY_PREFIX = "coupon_users:";
 
     @Value("${coupon.redis-lock.wait-time:5000}")
     private long waitTime;
@@ -35,7 +39,8 @@ public class RedisLockStrategy implements IssuanceStrategy {
 
     @Override
     public void issue(Long couponId, Long userId) {
-        if (issuanceRepository.existsByCouponIdAndUserId(couponId, userId)) {
+        Boolean added = redisTemplate.opsForSet().add(USERS_KEY_PREFIX + couponId, String.valueOf(userId)) == 1;
+        if (!Boolean.TRUE.equals(added)) {
             throw new DuplicateIssuanceException();
         }
 
