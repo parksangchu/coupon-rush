@@ -45,6 +45,8 @@ coupon:
   redis-lock:
     wait-time: 5000
     lease-time: 10000
+  redis-streams:
+    consumer-name: ${REDIS_CONSUMER_NAME:consumer-1}
   kafka:
     bootstrap-servers: localhost:19092
     topic: coupon-issuance
