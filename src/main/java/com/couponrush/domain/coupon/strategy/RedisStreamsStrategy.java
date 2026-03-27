@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisStreamsStrategy implements IssuanceStrategy {
 
-    static final String STREAM_KEY = "coupon_stream";
+    public static final String STREAM_KEY = "coupon_stream";
 
     /**
      * SADD + INCR + total 체크 + XADD를 원자 실행.
